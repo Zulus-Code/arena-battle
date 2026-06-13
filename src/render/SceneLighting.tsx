@@ -6,7 +6,7 @@ import { LEVEL_CONFIGS } from '@/config/LevelConfig';
 
 export function SceneLighting() {
   const session = useGameWorldStore(s => s.session);
-  const levelIndex = session ? session.level - 1 : 0;
+  const levelIndex = session ? session.level : 0;
   const config = LEVEL_CONFIGS[levelIndex] ?? LEVEL_CONFIGS[0];
   const ambientIntensity = config?.ambientIntensity ?? 0.3;
   const skyColor = config?.skyColor ?? '#1a1a2e';

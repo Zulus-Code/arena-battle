@@ -20,7 +20,7 @@ export default function HUD() {
       ? player.shield.remaining / player.shield.duration
       : 0;
   const levelName =
-    LEVEL_CONFIGS[session.level - 1]?.name ?? `УРОВЕНЬ ${session.level}`;
+    LEVEL_CONFIGS[session.level]?.name ?? `УРОВЕНЬ ${session.level + 1}`;
 
   return (
     <div className="pointer-events-none absolute inset-x-0 top-0 flex select-none items-start justify-between p-4 text-white">

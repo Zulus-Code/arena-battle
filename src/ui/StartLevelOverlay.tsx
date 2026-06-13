@@ -19,7 +19,7 @@ export default function StartLevelOverlay() {
 
   if (!visible) return null;
 
-  const levelIndex = (session?.level ?? 1) - 1;
+  const levelIndex = session?.level ?? 0;
   const levelName = LEVEL_CONFIGS[levelIndex]?.name ?? `УРОВЕНЬ ${levelIndex + 1}`;
 
   return (

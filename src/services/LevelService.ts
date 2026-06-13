@@ -100,7 +100,7 @@ export function buildLevelData(config: LevelConfig): {
   const arena = buildArena(config);
   const player = createDefaultPlayer();
   const pickups = spawnPickups(config, arena.obstacles, { x: config.arenaWidth / 2, z: config.arenaDepth / 2 });
-  const session: GameSessionData = { ...createGameSession(), level: config.index + 1 };
+  const session: GameSessionData = { ...createGameSession(), level: config.index };
 
   return { arena, player, pickups, session };
 }

@@ -61,7 +61,7 @@ export default function GameOverScreen() {
 
       <div className="flex flex-col gap-4">
         <button
-          onClick={() => restartLevel((session?.level ?? 1) - 1)}
+          onClick={() => restartLevel(session?.level ?? 0)}
           className="rounded-lg bg-green-600 px-10 py-3 text-xl font-bold transition-colors hover:bg-green-500"
         >
           ЗАНОВО

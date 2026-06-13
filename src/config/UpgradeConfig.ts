@@ -22,7 +22,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     maxLevel: 3,
     costs: [1000, 2500, 5000],
     appliesTo: 'player',
-    apply: (_base, level) => 150 + level * 50,
+    apply: (base, level) => base + level * 50,
   },
   {
     id: 'speed',
@@ -32,7 +32,7 @@ export const UPGRADES: readonly UpgradeDef[] = [
     maxLevel: 2,
     costs: [2000, 4000],
     appliesTo: 'player',
-    apply: (_base, level) => 10 + level * 1.5,
+    apply: (base, level) => base + level * 1.5,
   },
   {
     id: 'damage',
