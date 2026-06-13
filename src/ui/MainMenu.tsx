@@ -3,6 +3,7 @@ import { gameStateMachine } from '@/game/GameStateMachine';
 import { initLevel } from '@/game/initLevel';
 import { LEVEL_CONFIGS } from '@/config/LevelConfig';
 import { useUIStore } from '@/store/uiStore';
+import { StatsService } from '@/services/StatsService';
 
 // ─── Level info derived per badge ─────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ const LEVEL_STYLE: Record<number, { accent: string; stripe: string; tag: string 
 function startLevel(levelIndex: number): void {
   const config = LEVEL_CONFIGS[levelIndex];
   if (!config) return;
+  if (!StatsService.isLevelUnlocked(levelIndex)) return;
 
   gameStateMachine.transition('STARTING_LEVEL');
   useUIStore.getState().setGameState('STARTING_LEVEL');
@@ -88,39 +90,44 @@ function LevelBadge({
   onClick,
   index,
   delay,
+  locked,
+  stars,
 }: {
   level: (typeof LEVEL_CONFIGS)[number];
   isSelected: boolean;
   onClick: () => void;
   index: number;
   delay: number;
+  locked: boolean;
+  stars: number;
 }) {
   const style = LEVEL_STYLE[index] ?? LEVEL_STYLE[0];
 
   return (
     <button
-      onClick={onClick}
+      onClick={locked ? undefined : onClick}
+      disabled={locked}
       className={`
         group relative flex flex-col items-center justify-center
         w-44 sm:w-52 lg:w-60 px-4 py-5
         transition-all duration-500 ease-out select-none
-        ${isSelected ? 'scale-105 z-10' : 'hover:scale-[1.03]'}
+        ${locked ? 'cursor-not-allowed grayscale-[0.6] opacity-50' : 'cursor-pointer'}
+        ${isSelected && !locked ? 'scale-105 z-10' : 'hover:scale-[1.03]'}
       `}
       style={{
         opacity: 0,
         animation: `fadeSlideUp 600ms ease-out ${delay}ms forwards`,
-        transform: isSelected ? 'scale(1.05)' : undefined,
+        transform: isSelected && !locked ? 'scale(1.05)' : undefined,
       }}
     >
       {/* Background plate */}
       <div
         className={`
-          absolute inset-0 border
-          transition-all duration-500
-          ${isSelected ? 'border-amber-500/50 shadow-[0_0_20px_rgba(212,160,23,0.15)]' : 'border-gray-600/40'}
+          absolute inset-0 border transition-all duration-500
+          ${isSelected && !locked ? 'border-amber-500/50 shadow-[0_0_20px_rgba(212,160,23,0.15)]' : 'border-gray-600/40'}
         `}
         style={{
-          background: isSelected
+          background: isSelected && !locked
             ? 'linear-gradient(180deg, rgba(30,35,28,0.95) 0%, rgba(20,25,18,0.95) 100%)'
             : 'linear-gradient(180deg, rgba(25,30,23,0.85) 0%, rgba(18,22,16,0.85) 100%)',
         }}
@@ -131,24 +138,34 @@ function LevelBadge({
         className="absolute top-0 right-0 w-8 h-8 pointer-events-none transition-opacity duration-500"
         style={{
           background: `linear-gradient(135deg, transparent 50%, ${style.stripe}30 50%)`,
-          opacity: isSelected ? 0.9 : 0.4,
+          opacity: isSelected && !locked ? 0.9 : 0.4,
         }}
       />
 
+      {/* Lock overlay for locked levels */}
+      {locked && (
+        <div className="absolute inset-0 z-20 flex items-center justify-center">
+          <svg className="h-8 w-8 text-gray-500/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+            <path d="M7 11V7a5 5 0 0110 0v4" />
+          </svg>
+        </div>
+      )}
+
       {/* Content */}
-      <div className="relative z-10 flex flex-col items-center gap-1">
+      <div className={`relative z-10 flex flex-col items-center gap-1 ${locked ? 'opacity-40' : ''}`}>
         {/* Tactical tag */}
         <span
           className="text-[10px] font-mono tracking-[0.3em] uppercase"
-          style={{ color: isSelected ? style.accent : '#5a6050' }}
+          style={{ color: isSelected && !locked ? style.accent : '#5a6050' }}
         >
-          {style.tag}
+          {locked ? '🔒' : style.tag}
         </span>
 
-        {/* Level number — military stencil style */}
+        {/* Level number */}
         <span
           className="text-xl sm:text-2xl font-black leading-none transition-colors duration-500"
-          style={{ color: isSelected ? '#d4c5a0' : '#7a7860' }}
+          style={{ color: isSelected && !locked ? '#d4c5a0' : '#7a7860' }}
         >
           {String(index + 1).padStart(2, '0')}
         </span>
@@ -156,23 +173,34 @@ function LevelBadge({
         {/* Level name */}
         <span
           className="text-xs sm:text-sm font-semibold tracking-wider text-center leading-tight transition-colors duration-500"
-          style={{ color: isSelected ? '#c5c9c8' : '#7a7a6a' }}
+          style={{ color: isSelected && !locked ? '#c5c9c8' : '#7a7a6a' }}
         >
-          {level.name}
+          {locked ? '???' : level.name}
         </span>
+
+        {/* Stars row (only if earned) */}
+        {!locked && stars > 0 && (
+          <div className="mt-0.5 flex items-center gap-0.5 text-xs text-yellow-400">
+            {[1, 2, 3].map((i) => (
+              <span key={i} className={i <= stars ? 'opacity-100' : 'opacity-20'}>
+                {i <= stars ? '★' : '☆'}
+              </span>
+            ))}
+          </div>
+        )}
 
         {/* Selected indicator bar */}
         <div
           className={`
-            mt-1.5 h-0.5 w-10 transition-all duration-500
-            ${isSelected ? 'opacity-100 w-12' : 'opacity-0 w-0'}
+            mt-1.5 h-0.5 transition-all duration-500
+            ${isSelected && !locked ? 'opacity-100 w-12' : 'opacity-0 w-0'}
           `}
           style={{ background: `linear-gradient(90deg, transparent, ${style.accent}, transparent)` }}
         />
       </div>
 
       {/* Selected bottom highlight */}
-      {isSelected && (
+      {isSelected && !locked && (
         <div
           className="absolute bottom-0 left-2 right-2 h-[1px] pointer-events-none"
           style={{ background: `linear-gradient(90deg, transparent, ${style.accent}80, transparent)` }}
@@ -369,16 +397,23 @@ export default function MainMenu() {
 
         {/* Level selection */}
         <div className="flex flex-wrap items-center justify-center gap-3 sm:gap-4 lg:gap-6">
-          {LEVEL_CONFIGS.map((level, i) => (
-            <LevelBadge
-              key={level.index}
-              level={level}
-              isSelected={selectedLevel === level.index}
-              onClick={() => setSelectedLevel(level.index)}
-              index={level.index}
-              delay={300 + i * 120}
-            />
-          ))}
+          {LEVEL_CONFIGS.map((level, i) => {
+            const unlocked = StatsService.isLevelUnlocked(level.index);
+            const stats = StatsService.load();
+            const stars = stats.levelStars[level.index] ?? 0;
+            return (
+              <LevelBadge
+                key={level.index}
+                level={level}
+                isSelected={selectedLevel === level.index}
+                onClick={() => unlocked && setSelectedLevel(level.index)}
+                index={level.index}
+                delay={300 + i * 120}
+                locked={!unlocked}
+                stars={stars}
+              />
+            );
+          })}
         </div>
 
         {/* Start Game CTA */}
@@ -434,24 +469,36 @@ export default function MainMenu() {
           </span>
         </button>
 
-        {/* Footer hint + info button */}
-        <div className="flex items-center gap-4">
-          <p
-            className="text-[10px] sm:text-xs tracking-[0.25em] uppercase select-none"
+        {/* Footer hint + stats + info button */}
+        <div className="flex flex-col items-center gap-3">
+          <div
+            className="flex items-center gap-4 text-[10px] sm:text-xs tracking-[0.2em] uppercase select-none"
             style={{ color: '#4a5040', opacity: mounted ? 0.6 : 0 }}
           >
-            ВЫБЕРИТЕ МИССИЮ {'\u00B7'} В БОЙ
-          </p>
-          <button
-            onClick={() => setShowInfo(true)}
-            className="text-[10px] px-2.5 py-0.5 tracking-[0.15em] uppercase border border-amber-500/50 text-amber-400/90 hover:text-amber-300 hover:border-amber-400/80 hover:bg-amber-900/20 transition-all duration-300 select-none rounded-sm"
-            style={{
-              opacity: mounted ? 0.85 : 0,
-              textShadow: '0 0 6px rgba(212,160,23,0.3)',
-            }}
-          >
-            [?]
-          </button>
+            <span>УБИТО: {StatsService.load().totalKills}</span>
+            <span className="text-gray-600">|</span>
+            <span>СЫГРАНО: {StatsService.load().totalGamesPlayed}</span>
+            <span className="text-gray-600">|</span>
+            <span>АЧИВОК: {StatsService.earnedCount()}</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <p
+              className="text-[10px] sm:text-xs tracking-[0.25em] uppercase select-none"
+              style={{ color: '#4a5040', opacity: mounted ? 0.6 : 0 }}
+            >
+              ВЫБЕРИТЕ МИССИЮ {'\u00B7'} В БОЙ
+            </p>
+            <button
+              onClick={() => setShowInfo(true)}
+              className="text-[10px] px-2.5 py-0.5 tracking-[0.15em] uppercase border border-amber-500/50 text-amber-400/90 hover:text-amber-300 hover:border-amber-400/80 hover:bg-amber-900/20 transition-all duration-300 select-none rounded-sm"
+              style={{
+                opacity: mounted ? 0.85 : 0,
+                textShadow: '0 0 6px rgba(212,160,23,0.3)',
+              }}
+            >
+              [?]
+            </button>
+          </div>
         </div>
       </div>
 

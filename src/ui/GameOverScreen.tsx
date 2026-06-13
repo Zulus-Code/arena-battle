@@ -4,6 +4,7 @@ import { initLevel } from '@/game/initLevel';
 import { LEVEL_CONFIGS } from '@/config/LevelConfig';
 import { useGameWorldStore } from '@/store/gameWorldStore';
 import { useUIStore } from '@/store/uiStore';
+import { StatsService } from '@/services/StatsService';
 
 function restartLevel(levelIndex: number): void {
   const config = LEVEL_CONFIGS[levelIndex];
@@ -22,6 +23,12 @@ function backToMenu(): void {
 
 export default function GameOverScreen() {
   const session = useGameWorldStore((s) => s.session);
+  const stats = StatsService.load();
+
+  const acc =
+    session && session.shotsFired > 0
+      ? Math.round((session.shotsHit / session.shotsFired) * 100)
+      : 0;
 
   return (
     <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 text-white">
@@ -29,12 +36,28 @@ export default function GameOverScreen() {
         ПОРАЖЕНИЕ
       </h2>
 
-      <p className="mb-8 text-lg">
-        Итоговый счёт:{' '}
-        <span className="text-2xl font-bold text-yellow-400">
-          {session?.score ?? 0}
-        </span>
-      </p>
+      <div className="mb-8 space-y-2 text-lg">
+        <p>
+          Счёт:{' '}
+          <span className="text-2xl font-bold text-yellow-400">
+            {session?.score ?? 0}
+          </span>
+        </p>
+        <p>
+          Уничтожено врагов:{' '}
+          <span className="font-bold">{session?.enemiesKilled ?? 0}</span>
+        </p>
+        {session && session.shotsFired > 0 && (
+          <p>
+            Точность: <span className="font-bold">{acc}%</span>
+          </p>
+        )}
+        <p className="pt-2 text-sm text-gray-500">
+          Всего убито: <span className="text-gray-300">{stats.totalKills}</span>
+          {' · '}Сыграно: <span className="text-gray-300">{stats.totalGamesPlayed}</span>
+          {' · '}Ачивок: <span className="text-gray-300">{StatsService.earnedCount()}</span>
+        </p>
+      </div>
 
       <div className="flex flex-col gap-4">
         <button

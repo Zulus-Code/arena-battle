@@ -13,22 +13,42 @@ import { createGameSession } from '@/domain/entities/GameSession';
 import { PLAYER_CONFIG } from '@/config/PlayerConfig';
 import { ARENA_CONFIG } from '@/config/ArenaConfig';
 import { DEFAULT_PLAYER_WEAPON } from '@/config/WeaponConfig';
+import { UPGRADES } from '@/config/UpgradeConfig';
+import { StatsService } from '@/services/StatsService';
 import { randomService } from '@/core/RandomService';
 import { spawnPickups } from './SpawnService';
 import { v4 as uuidv4 } from 'uuid';
 
 function createDefaultPlayer(): PlayerData {
+  // Apply permanent upgrades from StatsService
+  const stats = StatsService.load();
+
+  const hpLevel = stats.upgrades.max_hp ?? 0;
+  const speedLevel = stats.upgrades.speed ?? 0;
+  const damageLevel = stats.upgrades.damage ?? 0;
+  const ammoLevel = stats.upgrades.max_ammo ?? 0;
+
+  // Apply upgrade formulas
+  const maxHealth = UPGRADES[0].apply(PLAYER_CONFIG.maxHealth, hpLevel);
+  const speed = UPGRADES[1].apply(PLAYER_CONFIG.speed, speedLevel);
+  const weaponDamage = UPGRADES[2].apply(DEFAULT_PLAYER_WEAPON.damage, damageLevel);
+  const maxAmmo = UPGRADES[3].apply(DEFAULT_PLAYER_WEAPON.maxAmmo, ammoLevel);
+
   return {
     id: uuidv4(),
     position: { ...PLAYER_CONFIG.startPosition },
     rotation: 0,
     velocity: { x: 0, y: 0, z: 0 },
-    health: createHealth(PLAYER_CONFIG.maxHealth),
+    health: createHealth(maxHealth),
     shield: createShield(),
-    weapon: createWeapon(DEFAULT_PLAYER_WEAPON),
+    weapon: createWeapon({
+      ...DEFAULT_PLAYER_WEAPON,
+      damage: weaponDamage,
+      maxAmmo,
+    }),
     status: 'Alive',
     score: 0,
-    speed: PLAYER_CONFIG.speed,
+    speed,
     turnSpeed: PLAYER_CONFIG.turnSpeed,
     speedBoostTimer: 0,
     rapidFireTimer: 0,
@@ -80,7 +100,7 @@ export function buildLevelData(config: LevelConfig): {
   const arena = buildArena(config);
   const player = createDefaultPlayer();
   const pickups = spawnPickups(config, arena.obstacles, { x: config.arenaWidth / 2, z: config.arenaDepth / 2 });
-  const session = createGameSession();
+  const session: GameSessionData = { ...createGameSession(), level: config.index + 1 };
 
   return { arena, player, pickups, session };
 }

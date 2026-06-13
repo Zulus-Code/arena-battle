@@ -4,6 +4,7 @@
 import type { EnemyType } from '@/domain/entities/Enemy';
 import type { PickupType } from '@/domain/entities/Pickup';
 import type { VictoryCondition } from '@/domain/rules/VictoryRules';
+import type { StarThresholds } from '@/domain/rules/StarRating';
 
 export interface EnemySpawnConfig {
   readonly type: EnemyType;
@@ -28,6 +29,7 @@ export interface LevelConfig {
   readonly timeLimit: number;        // seconds (0 = unlimited)
   readonly skyColor: string;
   readonly ambientIntensity: number;
+  readonly starThresholds: StarThresholds;
 }
 
 export const LEVEL_CONFIGS: readonly LevelConfig[] = [
@@ -49,6 +51,11 @@ export const LEVEL_CONFIGS: readonly LevelConfig[] = [
     timeLimit: 0,
     skyColor: '#1a2a4a',
     ambientIntensity: 0.4,
+    starThresholds: {
+      bronze: { minScore: 500, maxTime: 60, minAccuracy: 0.35 },
+      silver: { minScore: 1000, maxTime: 45, minAccuracy: 0.55 },
+      gold: { minScore: 2000, maxTime: 30, minAccuracy: 0.75 },
+    },
   },
   {
     index: 1,
@@ -70,6 +77,11 @@ export const LEVEL_CONFIGS: readonly LevelConfig[] = [
     timeLimit: 0,
     skyColor: '#0d1b2a',
     ambientIntensity: 0.3,
+    starThresholds: {
+      bronze: { minScore: 1500, maxTime: 90, minAccuracy: 0.30 },
+      silver: { minScore: 3000, maxTime: 60, minAccuracy: 0.50 },
+      gold: { minScore: 5000, maxTime: 40, minAccuracy: 0.70 },
+    },
   },
   {
     index: 2,
@@ -93,5 +105,10 @@ export const LEVEL_CONFIGS: readonly LevelConfig[] = [
     timeLimit: 0,
     skyColor: '#1a0a0a',
     ambientIntensity: 0.25,
+    starThresholds: {
+      bronze: { minScore: 3000, maxTime: 120, minAccuracy: 0.30 },
+      silver: { minScore: 6000, maxTime: 80, minAccuracy: 0.50 },
+      gold: { minScore: 10000, maxTime: 50, minAccuracy: 0.70 },
+    },
   },
 ] as const;

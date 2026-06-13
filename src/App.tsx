@@ -4,7 +4,9 @@
 import { useEffect } from 'react';
 import { gameStateMachine } from '@/game/GameStateMachine';
 import { useUIStore } from '@/store/uiStore';
+import { useGamificationStore } from '@/store/gamificationStore';
 import { keyboardInput } from '@/input/KeyboardInput';
+import { StatsService } from '@/services/StatsService';
 import GameCanvas from '@/render/GameCanvas';
 import MainMenu from '@/ui/MainMenu';
 import HUD from '@/ui/HUD';
@@ -12,6 +14,7 @@ import PauseMenu from '@/ui/PauseMenu';
 import GameOverScreen from '@/ui/GameOverScreen';
 import LevelCompleteScreen from '@/ui/LevelCompleteScreen';
 import VictoryScreen from '@/ui/VictoryScreen';
+import AchievementNotifications from '@/ui/AchievementNotification';
 import DebugOverlay from '@/ui/DebugOverlay';
 import StartLevelOverlay from '@/ui/StartLevelOverlay';
 import { ErrorBoundary } from '@/ui/ErrorBoundary';
@@ -19,6 +22,13 @@ import { ErrorBoundary } from '@/ui/ErrorBoundary';
 export default function App() {
   const gameState = useUIStore((s) => s.gameState);
   const debugEnabled = useUIStore((s) => s.debugEnabled);
+  const setStats = useGamificationStore((s) => s.setStats);
+
+  // Load persistent stats on mount
+  useEffect(() => {
+    const stats = StatsService.load();
+    setStats(stats);
+  }, [setStats]);
 
   // Attach input on mount, detach on unmount
   useEffect(() => {
@@ -50,6 +60,7 @@ export default function App() {
           <>
             <GameCanvas />
             <HUD />
+            <AchievementNotifications />
             {debugEnabled && <DebugOverlay />}
             {gameState === 'PAUSED' && <PauseMenu />}
             {gameState === 'STARTING_LEVEL' && <StartLevelOverlay />}
@@ -58,7 +69,12 @@ export default function App() {
           </>
         )}
 
-        {gameState === 'VICTORY' && <VictoryScreen />}
+        {gameState === 'VICTORY' && (
+          <>
+            <VictoryScreen />
+            <AchievementNotifications />
+          </>
+        )}
       </div>
     </ErrorBoundary>
   );
