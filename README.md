@@ -8,6 +8,11 @@
 [![Vite](https://img.shields.io/badge/Vite-7-646CFF?logo=vite)](https://vite.dev/)
 [![Tailwind CSS](https://img.shields.io/badge/Tailwind-4.1-06B6D4?logo=tailwindcss)](https://tailwindcss.com/)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![CI](https://github.com/Zulus-Code/arena-battle/actions/workflows/ci.yml/badge.svg)](https://github.com/Zulus-Code/arena-battle/actions/workflows/ci.yml)
+
+---
+
+> **Статус:** В активной разработке (pre-alpha) — базовый геймплей реализован, ведётся полировка и наполнение контентом.
 
 ---
 
@@ -273,4 +278,4 @@ npm run lint
 
 ## Лицензия
 
-MIT
+Распространяется под лицензией MIT. Подробности в файле [LICENSE](LICENSE).

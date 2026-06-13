@@ -1,0 +1,21 @@
+# Auto-detect text files and normalize line endings
+* text=auto eol=lf
+
+# Mark all source files as text
+*.ts text
+*.tsx text
+*.js text
+*.jsx text
+*.css text
+*.html text
+*.json text
+*.md text
+*.yml text
+*.yaml text
+
+# Binary files
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.woff2 binary

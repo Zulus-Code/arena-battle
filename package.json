@@ -1,14 +1,32 @@
 {
-  "name": "react-vite-tailwind",
+  "name": "arena-battle",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.1.0",
   "type": "module",
+  "description": "Боевые багги на арене от третьего лица. 3D-шутер на Three.js с системой прокачки, достижениями и процедурными уровнями.",
+  "keywords": ["game", "threejs", "3d", "shooter", "arena", "react", "r3f"],
+  "license": "MIT",
+  "author": {
+    "name": "Zulus-Code"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Zulus-Code/arena-battle.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Zulus-Code/arena-battle/issues"
+  },
+  "homepage": "https://github.com/Zulus-Code/arena-battle#readme",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
     "lint": "eslint .",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "ci": "npm run typecheck && npm run lint && npm run build"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
