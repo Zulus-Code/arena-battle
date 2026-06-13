@@ -17,29 +17,33 @@ interface TankMeshProps {
 }
 
 const COLORS = {
+  // Both factions share a unified khaki/olive drab military scheme.
+  // Only headlight/emissive color differs for quick IFF at a glance.
   Player: {
-    underbody: '#334466',
-    body:      '#4a7eff',
-    cabin:     '#2a5edd',
-    gun:       '#5588cc',
+    underbody: '#4a4030',
+    body:      '#8b7d5e',
+    cabin:     '#5c5239',
+    gun:       '#7a6f54',
     wheel:     '#1a1a1a',
-    headlight: '#ffffaa',
-    glass:     '#1a2a44',
+    headlight: '#ffffcc',
+    glass:     '#2a2a20',
     exhaust:   '#3a3a3a',
-    trim:      '#1a2a44',
+    trim:      '#3d3528',
     seat:      '#1a1a1a',
+    ammo:      '#d4a844',  // brass/gold casings
   },
   Enemy: {
-    underbody: '#553333',
-    body:      '#dd3333',
-    cabin:     '#aa1111',
-    gun:       '#cc4444',
+    underbody: '#4a4030',
+    body:      '#8b7d5e',
+    cabin:     '#5c5239',
+    gun:       '#7a6f54',
     wheel:     '#1a1a1a',
-    headlight: '#ff8888',
-    glass:     '#331111',
+    headlight: '#ffcc66',
+    glass:     '#2a2a20',
     exhaust:   '#3a3a3a',
-    trim:      '#331111',
+    trim:      '#3d3528',
     seat:      '#1a1a1a',
+    ammo:      '#b87333',  // copper/rust casings
   },
 } as const;
 
@@ -597,7 +601,12 @@ function RoofGun({ faction, recoilRotation }: {
         {/* Side ammo box */}
         <mesh position={[-0.13, 0, -0.02]} castShadow>
           <boxGeometry args={[0.12, 0.09, 0.16]} />
-          <meshStandardMaterial color={c.trim} roughness={0.45} metalness={0.72} />
+          <meshStandardMaterial color={c.ammo} roughness={0.42} metalness={0.68} />
+        </mesh>
+        {/* Ammo belt feed */}
+        <mesh position={[-0.1, 0.015, 0.08]} rotation={[0.05, 0.4, 0.1]} castShadow>
+          <boxGeometry args={[0.06, 0.012, 0.12]} />
+          <meshStandardMaterial color={c.ammo} roughness={0.5} metalness={0.6} />
         </mesh>
 
         {/* Barrel tube */}
@@ -666,15 +675,29 @@ function RocketLauncher({
               <cylinderGeometry args={[0.038, 0.044, 0.42, 10]} />
               <meshStandardMaterial color={c.trim} roughness={0.28} metalness={0.86} />
             </mesh>
+            {/* Rocket warhead tip */}
             <mesh rotation={[Math.PI / 2, 0, 0]} position={[x, y + 0.02, 0.47]}>
-              <cylinderGeometry args={[0.032, 0.032, 0.018, 10]} />
-              <meshStandardMaterial color="#0b0b0d" roughness={0.82} metalness={0.2} />
+              <cylinderGeometry args={[0.036, 0.024, 0.04, 10]} />
+              <meshStandardMaterial color={c.ammo} roughness={0.3} metalness={0.7} />
+            </mesh>
+            <mesh rotation={[0, 0, 0]} position={[x, y + 0.02, 0.49]}>
+              <sphereGeometry args={[0.024, 6, 6]} />
+              <meshStandardMaterial color={c.ammo} roughness={0.25} metalness={0.7} />
             </mesh>
           </group>
         ))}
         <mesh position={[0, -0.105, 0.08]} castShadow>
           <boxGeometry args={[0.38, 0.025, 0.2]} />
           <meshStandardMaterial color={c.trim} roughness={0.38} metalness={0.84} />
+        </mesh>
+        {/* Rocket ammo box */}
+        <mesh position={[-0.22, 0, 0.02]} castShadow>
+          <boxGeometry args={[0.12, 0.16, 0.18]} />
+          <meshStandardMaterial color={c.ammo} roughness={0.4} metalness={0.65} />
+        </mesh>
+        <mesh position={[-0.22, -0.09, 0.08]} castShadow>
+          <boxGeometry args={[0.14, 0.02, 0.22]} />
+          <meshStandardMaterial color={c.trim} roughness={0.42} metalness={0.78} />
         </mesh>
       </group>
     </group>
