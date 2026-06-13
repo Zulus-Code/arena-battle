@@ -4,6 +4,7 @@
 
 import { useFrame, useThree } from '@react-three/fiber';
 import { useGameWorldStore } from '@/store/gameWorldStore';
+import { screenShake } from '@/effects/ScreenShake';
 
 const DISTANCE = 9;
 const HEIGHT = 14;
@@ -34,6 +35,11 @@ export function CameraRig() {
       targetX = Math.max(-halfW, Math.min(halfW, rawTargetX));
       targetZ = Math.max(-halfD, Math.min(halfD, rawTargetZ));
     }
+
+    // Screen shake offset
+    const shakeOffset = screenShake.getOffset();
+    targetX += shakeOffset.x;
+    targetZ += shakeOffset.z;
 
     // Smooth follow
     const smooth = 1 - Math.exp(-6 * delta);

@@ -17,8 +17,6 @@ export interface DamageResult {
   readonly absorbed: boolean;
 }
 
-const SHIELD_ABSORPTION = 1.0; // shield absorbs 100% of damage
-
 /** Calculate final damage after applying rules */
 export function calculateDamage(ctx: DamageContext): DamageResult {
   if (ctx.targetHasShield) {
@@ -39,7 +37,7 @@ export function calculateDamage(ctx: DamageContext): DamageResult {
   }
 
   return {
-    finalDamage: Math.round(damage * (1 - SHIELD_ABSORPTION * 0)),
+    finalDamage: Math.round(damage),
     absorbed: false,
   };
 }

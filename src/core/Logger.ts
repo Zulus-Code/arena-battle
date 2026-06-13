@@ -56,8 +56,7 @@ export class ProductionLogger implements ILogger {
 
 // ─── Factory ─────────────────────────────────────────────────────────────────
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const isDev = (import.meta as any).env?.DEV ?? false;
+const isDev = import.meta.env?.DEV ?? false;
 
 export function createLogger(prefix: string): ILogger {
   return isDev ? new DevLogger(prefix) : new ProductionLogger();

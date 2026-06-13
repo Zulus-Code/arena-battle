@@ -22,7 +22,7 @@ export function setupSoundEffects(): UnsubscribeFn {
   unsubs.push(eventBus.on('ShieldActivated', () => audioManager.playSound('shield')));
   unsubs.push(eventBus.on('LevelCompleted', () => audioManager.playSound('levelComplete')));
   unsubs.push(eventBus.on('GameOver', () => audioManager.playSound('gameOver')));
-  unsubs.push(eventBus.on('BossSpawned', () => audioManager.playSound('boss')));
+
   unsubs.push(eventBus.on('ExplosionCreated', () => audioManager.playSound('explosion')));
 
   log.info('Sound effects initialized');

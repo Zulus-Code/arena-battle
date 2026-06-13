@@ -59,11 +59,10 @@ function applyPickup(player: PlayerData, pickup: PickupData): PlayerData {
       return { ...player, weapon: reloadAmmo(player.weapon) };
 
     case 'SpeedBoost':
-      // Temporary speed boost — tracked via a timed value
-      return { ...player, speed: player.speed * 1.5 };
+      return { ...player, speedBoostTimer: pickup.value };
 
     case 'RapidFire':
-      return player; // Handled separately via event
+      return { ...player, rapidFireTimer: pickup.value };
   }
 }
 

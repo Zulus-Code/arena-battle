@@ -9,7 +9,6 @@ export interface DebugMetrics {
   enemyCount: number;
   projectileCount: number;
   explosionCount: number;
-  physicsBodies: number;
   updateTime: number;    // ms spent in game update
 }
 
@@ -24,7 +23,6 @@ const INITIAL_METRICS: DebugMetrics = {
   enemyCount: 0,
   projectileCount: 0,
   explosionCount: 0,
-  physicsBodies: 0,
   updateTime: 0,
 };
 

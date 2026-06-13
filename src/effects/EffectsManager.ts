@@ -8,7 +8,6 @@ import type {
   EnemyKilledEvent,
   PlayerDamagedEvent,
   PlayerKilledEvent,
-  BossSpawnedEvent,
 } from '@/events/GameEvents';
 import { screenShake } from './ScreenShake';
 import { particleSystem } from './ParticleSystem';
@@ -42,13 +41,6 @@ export function setupEffects(): () => void {
     eventBus.on('PlayerKilled', (e: PlayerKilledEvent) => {
       screenShake.trigger(0.5);
       particleSystem.burst(e.position, 30, '#ff0000', 8, 0.5, 1.5);
-    }),
-  );
-
-  unsubs.push(
-    eventBus.on('BossSpawned', (e: BossSpawnedEvent) => {
-      screenShake.trigger(0.4);
-      particleSystem.burst(e.position, 15, '#9900ff', 6, 0.4, 1.2);
     }),
   );
 

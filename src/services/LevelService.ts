@@ -4,7 +4,6 @@
 import type { LevelConfig } from '@/config/LevelConfig';
 import type { ArenaData, ObstacleData } from '@/domain/entities/Arena';
 import type { PlayerData } from '@/domain/entities/Player';
-import type { EnemyData } from '@/domain/entities/Enemy';
 import type { PickupData } from '@/domain/entities/Pickup';
 import type { GameSessionData } from '@/domain/entities/GameSession';
 import { createHealth } from '@/domain/entities/Health';
@@ -15,7 +14,7 @@ import { PLAYER_CONFIG } from '@/config/PlayerConfig';
 import { ARENA_CONFIG } from '@/config/ArenaConfig';
 import { DEFAULT_PLAYER_WEAPON } from '@/config/WeaponConfig';
 import { randomService } from '@/core/RandomService';
-import { spawnEnemies, spawnPickups } from './SpawnService';
+import { spawnPickups } from './SpawnService';
 import { v4 as uuidv4 } from 'uuid';
 
 function createDefaultPlayer(): PlayerData {
@@ -31,6 +30,8 @@ function createDefaultPlayer(): PlayerData {
     score: 0,
     speed: PLAYER_CONFIG.speed,
     turnSpeed: PLAYER_CONFIG.turnSpeed,
+    speedBoostTimer: 0,
+    rapidFireTimer: 0,
   };
 }
 
@@ -69,21 +70,17 @@ export function buildArena(config: LevelConfig): ArenaData {
   };
 }
 
-/** Build all entities and state for a level */
+/** Build all entities and state for a level (enemies are spawned separately in initLevel with delays) */
 export function buildLevelData(config: LevelConfig): {
   readonly arena: ArenaData;
   readonly player: PlayerData;
-  readonly enemies: readonly EnemyData[];
   readonly pickups: readonly PickupData[];
   readonly session: GameSessionData;
 } {
   const arena = buildArena(config);
   const player = createDefaultPlayer();
-  const arenaHalf = { x: config.arenaWidth / 2, z: config.arenaDepth / 2 };
-  const obstacles = arena.obstacles;
-  const enemies = spawnEnemies(config, arenaHalf, player.id, obstacles);
-  const pickups = spawnPickups(config, obstacles, arenaHalf);
+  const pickups = spawnPickups(config, arena.obstacles, { x: config.arenaWidth / 2, z: config.arenaDepth / 2 });
   const session = createGameSession();
 
-  return { arena, player, enemies, pickups, session };
+  return { arena, player, pickups, session };
 }

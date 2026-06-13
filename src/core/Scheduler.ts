@@ -47,6 +47,8 @@ export class Scheduler {
 
   /** Must be called every fixed update with delta time in seconds */
   tick(dt: number): void {
+    // Iterate over snapshot to avoid issues if callbacks add/remove tasks
+    const toRemove: string[] = [];
     for (const task of this.tasks.values()) {
       task.remaining -= dt;
       if (task.remaining <= 0) {
@@ -54,9 +56,12 @@ export class Scheduler {
         if (task.repeat) {
           task.remaining = task.interval + task.remaining;
         } else {
-          this.tasks.delete(task.id);
+          toRemove.push(task.id);
         }
       }
+    }
+    for (const id of toRemove) {
+      this.tasks.delete(id);
     }
   }
 

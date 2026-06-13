@@ -14,6 +14,7 @@ import LevelCompleteScreen from '@/ui/LevelCompleteScreen';
 import VictoryScreen from '@/ui/VictoryScreen';
 import DebugOverlay from '@/ui/DebugOverlay';
 import StartLevelOverlay from '@/ui/StartLevelOverlay';
+import { ErrorBoundary } from '@/ui/ErrorBoundary';
 
 export default function App() {
   const gameState = useUIStore((s) => s.gameState);
@@ -41,22 +42,24 @@ export default function App() {
     gameState === 'STARTING_LEVEL';
 
   return (
-    <div className="h-screen w-full overflow-hidden bg-black">
-      {(gameState === 'MENU' || gameState === 'BOOT') && <MainMenu />}
+    <ErrorBoundary>
+      <div className="h-screen w-full overflow-hidden bg-black">
+        {(gameState === 'MENU' || gameState === 'BOOT') && <MainMenu />}
 
-      {show3DScene && (
-        <>
-          <GameCanvas />
-          <HUD />
-          {debugEnabled && <DebugOverlay />}
-          {gameState === 'PAUSED' && <PauseMenu />}
-          {gameState === 'STARTING_LEVEL' && <StartLevelOverlay />}
-          {gameState === 'LEVEL_COMPLETE' && <LevelCompleteScreen />}
-          {gameState === 'GAME_OVER' && <GameOverScreen />}
-        </>
-      )}
+        {show3DScene && (
+          <>
+            <GameCanvas />
+            <HUD />
+            {debugEnabled && <DebugOverlay />}
+            {gameState === 'PAUSED' && <PauseMenu />}
+            {gameState === 'STARTING_LEVEL' && <StartLevelOverlay />}
+            {gameState === 'LEVEL_COMPLETE' && <LevelCompleteScreen />}
+            {gameState === 'GAME_OVER' && <GameOverScreen />}
+          </>
+        )}
 
-      {gameState === 'VICTORY' && <VictoryScreen />}
-    </div>
+        {gameState === 'VICTORY' && <VictoryScreen />}
+      </div>
+    </ErrorBoundary>
   );
 }

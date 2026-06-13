@@ -3,6 +3,7 @@
 // Systems write here. Renderers read here.
 
 import { create } from 'zustand';
+import { shallow } from 'zustand/shallow';
 import type { PlayerData } from '@/domain/entities/Player';
 import type { EnemyData } from '@/domain/entities/Enemy';
 import type { ProjectileData } from '@/domain/entities/Projectile';
@@ -51,18 +52,30 @@ export const useGameWorldStore = create<GameWorldState>((set) => ({
 
   setPlayer: (player) => set({ player }),
 
-  setEnemies: (enemies) => set({ enemies }),
+  setEnemies: (enemies) => set((state) => {
+    if (shallow(state.enemies, enemies)) return state;
+    return { enemies };
+  }),
 
   updateEnemy: (id, patch) =>
     set((state) => ({
       enemies: state.enemies.map((e) => (e.id === id ? { ...e, ...patch } : e)),
     })),
 
-  setProjectiles: (projectiles) => set({ projectiles }),
+  setProjectiles: (projectiles) => set((state) => {
+    if (shallow(state.projectiles, projectiles)) return state;
+    return { projectiles };
+  }),
 
-  setPickups: (pickups) => set({ pickups }),
+  setPickups: (pickups) => set((state) => {
+    if (shallow(state.pickups, pickups)) return state;
+    return { pickups };
+  }),
 
-  setExplosions: (explosions) => set({ explosions }),
+  setExplosions: (explosions) => set((state) => {
+    if (shallow(state.explosions, explosions)) return state;
+    return { explosions };
+  }),
 
   addExplosion: (explosion) =>
     set((state) => ({ explosions: [...state.explosions, explosion] })),

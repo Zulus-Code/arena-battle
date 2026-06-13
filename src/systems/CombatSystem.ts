@@ -1,6 +1,8 @@
 // ─── Combat System ────────────────────────────────────────────────────────────
 // Handles shooting logic, hit detection between projectiles and entities.
 
+import type { HealthData } from '@/domain/entities/Health';
+import type { ShieldData } from '@/domain/entities/Shield';
 import type { PlayerData } from '@/domain/entities/Player';
 import type { EnemyData } from '@/domain/entities/Enemy';
 import type { ProjectileData } from '@/domain/entities/Projectile';
@@ -16,19 +18,40 @@ export interface CombatHitResult {
   readonly hitProjectileIds: Set<string>;
   readonly updatedPlayer: PlayerData;
   readonly updatedEnemies: readonly EnemyData[];
+  readonly shotsHit: number;  // number of player shots that hit enemies this frame
+}
+
+/** Unified damage application: shield-check → calculateDamage → applyDamage.
+ *  Returns the new health (unchanged if shielded) and actual damage dealt. */
+interface DamageResult { newHealth: HealthData; finalDamage: number; shielded: boolean }
+function applyCombatDamage(health: HealthData, shield: ShieldData, baseDamage: number): DamageResult {
+  const shielded = isShielded(shield);
+  const { finalDamage } = calculateDamage({
+    baseDamage,
+    damageType: 'Kinetic',
+    targetHasShield: shielded,
+  });
+  const newHealth = shielded ? health : applyDamage(health, finalDamage);
+  return { newHealth, finalDamage, shielded };
 }
 
 export function processProjectileHits(
   projectiles: readonly ProjectileData[],
   player: PlayerData,
   enemies: readonly EnemyData[],
+  blockedProjectileIds?: ReadonlySet<string>,
 ): CombatHitResult {
   const hitProjectileIds = new Set<string>();
   let updatedPlayer = player;
+  let shotsHit = 0;
   const updatedEnemies = [...enemies];
 
   for (const proj of projectiles) {
     if (!proj.active || hitProjectileIds.has(proj.id)) continue;
+    if (blockedProjectileIds?.has(proj.id)) {
+      hitProjectileIds.add(proj.id);
+      continue;
+    }
 
     // Enemy projectiles hit player
     if (proj.faction === 'Enemy') {
@@ -37,19 +60,9 @@ export function processProjectileHits(
       );
       if (hit) {
         hitProjectileIds.add(proj.id);
-        const shielded = isShielded(player.shield);
-        const { finalDamage } = calculateDamage({
-          baseDamage: proj.damage,
-          damageType: 'Kinetic',
-          targetHasShield: shielded,
-        });
+        const { newHealth, finalDamage, shielded } = applyCombatDamage(player.health, player.shield, proj.damage);
 
-        if (!shielded) {
-          updatedPlayer = {
-            ...updatedPlayer,
-            health: applyDamage(updatedPlayer.health, finalDamage),
-          };
-        }
+        updatedPlayer = { ...updatedPlayer, health: newHealth };
 
         eventBus.emit({
           type: 'ProjectileHit',
@@ -66,11 +79,11 @@ export function processProjectileHits(
             damage: finalDamage,
             source: { kind: 'Projectile', projectileId: proj.id, ownerId: proj.ownerId },
             position: proj.position,
-            remainingHealth: updatedPlayer.health.current,
+            remainingHealth: newHealth.current,
           });
         }
 
-        if (isDead(updatedPlayer.health)) {
+        if (isDead(newHealth)) {
           updatedPlayer = { ...updatedPlayer, status: 'Dead' };
           eventBus.emit({
             type: 'PlayerKilled',
@@ -93,14 +106,8 @@ export function processProjectileHits(
         );
         if (hit) {
           hitProjectileIds.add(proj.id);
-          const shielded = isShielded(enemy.shield);
-          const { finalDamage } = calculateDamage({
-            baseDamage: proj.damage,
-            damageType: 'Kinetic',
-            targetHasShield: shielded,
-          });
-
-          const newHealth = shielded ? enemy.health : applyDamage(enemy.health, finalDamage);
+          shotsHit++;
+          const { newHealth, finalDamage } = applyCombatDamage(enemy.health, enemy.shield, proj.damage);
           const newStatus = isDead(newHealth) ? 'Dead' : enemy.status;
           updatedEnemies[i] = { ...enemy, health: newHealth, status: newStatus };
 
@@ -112,8 +119,7 @@ export function processProjectileHits(
             damage: finalDamage,
           });
 
-          const wasAlive = (enemy.status as string) !== 'Dead';
-          if (isDead(newHealth) && wasAlive) {
+          if (isDead(newHealth)) {
             eventBus.emit({
               type: 'EnemyKilled',
               enemyId: enemy.id,
@@ -133,5 +139,6 @@ export function processProjectileHits(
     hitProjectileIds,
     updatedPlayer,
     updatedEnemies,
+    shotsHit,
   };
 }

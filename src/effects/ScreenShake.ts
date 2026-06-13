@@ -2,6 +2,8 @@
 // Tracks shake intensity for camera effects.
 // Renderer reads this data and applies offset to camera.
 
+import { randomService } from '@/core/RandomService';
+
 export interface ShakeState {
   readonly intensity: number;
   readonly decay: number;
@@ -34,8 +36,8 @@ export class ScreenShakeManager {
   getOffset(): { x: number; z: number } {
     const i = this.state.intensity;
     return {
-      x: (Math.random() - 0.5) * 2 * i,
-      z: (Math.random() - 0.5) * 2 * i,
+      x: randomService.range(-i, i),
+      z: randomService.range(-i, i),
     };
   }
 

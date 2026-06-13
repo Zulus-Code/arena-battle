@@ -6,8 +6,8 @@ import type { EnemyData, EnemyAIState } from '@/domain/entities/Enemy';
 import type { PlayerData } from '@/domain/entities/Player';
 import type { ObstacleData } from '@/domain/entities/Arena';
 import type { TankCollider } from './MovementSystem';
-import { applyEnemyMovement } from './MovementSystem';
-import { canFire, fireWeapon, tickWeapon } from '@/domain/entities/Weapon';
+import { applyEnemyMovement, circleOverlapsAABB } from './MovementSystem';
+import { canFire, fireWeapon, tickWeapon, reloadAmmo } from '@/domain/entities/Weapon';
 
 // Module-level state updated each tick
 const CTX = { arenaHalf: { x: 20, z: 20 }, obstacles: [] as readonly ObstacleData[], tankColliders: [] as readonly TankCollider[] };
@@ -83,13 +83,22 @@ export function updateEnemyAI(
   const behavior = STATE_BEHAVIORS[enemy.aiState];
   let updated = behavior(enemy, player, dt);
 
+  // Auto-reload when out of ammo and weapon is cooled down
+  if (updated.weapon.ammo <= 0 && updated.weapon.cooldown <= 0) {
+    updated = { ...updated, weapon: reloadAmmo(updated.weapon) };
+  }
+
   updated = { ...updated, weapon: tickWeapon(updated.weapon, dt) };
   updated = { ...updated, aiTimer: updated.aiTimer + dt };
 
   return updated;
 }
 
-export function shouldEnemyFire(enemy: EnemyData, player: PlayerData): boolean {
+export function shouldEnemyFire(
+  enemy: EnemyData,
+  player: PlayerData,
+  obstacles: readonly ObstacleData[],
+): boolean {
   if (enemy.status === 'Dead') return false;
   if (enemy.aiState !== 'ATTACK') return false;
   if (!canFire(enemy.weapon)) return false;
@@ -97,7 +106,39 @@ export function shouldEnemyFire(enemy: EnemyData, player: PlayerData): boolean {
   if (dist > enemy.attackRange) return false;
   const aimAngle = Math.atan2(player.position.x - enemy.position.x, player.position.z - enemy.position.z);
   const diff = Math.abs(normalizeAngle(aimAngle - enemy.rotation));
-  return diff < 0.4;
+  if (diff >= 0.4) return false;
+
+  // Line-of-sight check
+  if (!hasLineOfSight(enemy.position.x, enemy.position.z, player.position.x, player.position.z, obstacles)) {
+    return false;
+  }
+
+  return true;
+}
+
+/** Check if there's a direct line of sight between two positions (no obstacles in the way). */
+function hasLineOfSight(
+  fromX: number, fromZ: number,
+  toX: number, toZ: number,
+  obstacles: readonly ObstacleData[],
+): boolean {
+  const dx = toX - fromX;
+  const dz = toZ - fromZ;
+  const dist = Math.sqrt(dx * dx + dz * dz);
+  if (dist < 0.1) return true;
+
+  // Sample along the line
+  const steps = Math.max(3, Math.ceil(dist / 1.5));
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const px = fromX + dx * t;
+    const pz = fromZ + dz * t;
+    for (const obs of obstacles) {
+      if (obs.hp <= 0) continue;
+      if (circleOverlapsAABB(px, pz, 0.3, obs)) return false;
+    }
+  }
+  return true;
 }
 
 export function consumeEnemyShot(enemy: EnemyData): EnemyData {

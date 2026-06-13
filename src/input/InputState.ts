@@ -12,14 +12,4 @@ export interface InputState {
   readonly pause: boolean;
 }
 
-export function createEmptyInputState(): InputState {
-  return {
-    moveForward: false,
-    moveBackward: false,
-    turnLeft: false,
-    turnRight: false,
-    fire: false,
-    activateShield: false,
-    pause: false,
-  };
-}
+

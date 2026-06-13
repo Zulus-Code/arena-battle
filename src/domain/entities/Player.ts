@@ -17,4 +17,6 @@ export interface PlayerData {
   readonly score: number;
   readonly speed: number;
   readonly turnSpeed: number;
+  readonly speedBoostTimer: number;  // seconds remaining, 0 = inactive
+  readonly rapidFireTimer: number;   // seconds remaining, 0 = inactive
 }

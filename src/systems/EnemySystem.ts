@@ -1,66 +1,50 @@
 // ─── Enemy System ──────────────────────────────────────────────────────────────
-// Enemy lifecycle: spawning, death marking, cleanup, counting.
+// Handles enemy AI update and enemy shooting for the game loop.
 
-import type { EnemyData, EnemyType } from '@/domain/entities/Enemy';
-import type { Vec3 } from '@/domain/types/CoreTypes';
-import type { LevelConfig } from '@/config/LevelConfig';
-import { ENEMY_CONFIGS } from '@/config/EnemyConfig';
-import { WEAPON_CONFIGS } from '@/config/WeaponConfig';
-import { createHealth } from '@/domain/entities/Health';
-import { createShield } from '@/domain/entities/Shield';
-import { createWeapon } from '@/domain/entities/Weapon';
-import { eventBus } from '@/events/EventBus';
-import { v4 as uuidv4 } from 'uuid';
+import type { EnemyData } from '@/domain/entities/Enemy';
+import type { PlayerData } from '@/domain/entities/Player';
+import type { ProjectileData } from '@/domain/entities/Projectile';
+import type { ObstacleData } from '@/domain/entities/Arena';
+import type { TankCollider } from './MovementSystem';
+import { updateEnemyAI, shouldEnemyFire, consumeEnemyShot } from './EnemyAISystem';
+import { spawnProjectile } from './ProjectileSystem';
 
-export function spawnEnemy(type: EnemyType, position: Vec3, _config: LevelConfig): EnemyData {
-  const enemyConfig = ENEMY_CONFIGS[type];
-  const weaponConfig = WEAPON_CONFIGS[enemyConfig.weaponId];
-  const id = uuidv4();
-
-  const enemy: EnemyData = {
-    id, type, faction: 'Enemy',
-    position: { x: position.x, y: 0.5, z: position.z },
-    rotation: 0, velocity: { x: 0, y: 0, z: 0 },
-    health: createHealth(enemyConfig.maxHealth),
-    shield: createShield(),
-    weapon: createWeapon(weaponConfig),
-    status: 'Alive', aiState: 'SEARCH', aiTimer: 0, targetId: null,
-    speed: enemyConfig.speed,
-    turnSpeed: enemyConfig.turnSpeed,
-    detectionRange: enemyConfig.detectionRange,
-    attackRange: enemyConfig.attackRange,
-    scoreReward: enemyConfig.scoreReward,
-    isBoss: enemyConfig.isBoss,
-  };
-
-  eventBus.emit({ type: 'EnemySpawned', enemyId: id, position: enemy.position, enemyType: type });
-  return enemy;
+export interface EnemyUpdateResult {
+  readonly enemies: readonly EnemyData[];
+  readonly newProjectiles: readonly ProjectileData[];
 }
 
-export function markEnemyDead(enemy: EnemyData): EnemyData {
-  if (enemy.status === 'Dead') return enemy;
+export function updateEnemies(
+  enemies: readonly EnemyData[],
+  player: PlayerData,
+  dt: number,
+  arenaHalf: { readonly x: number; readonly z: number },
+  obstacles: readonly ObstacleData[],
+): EnemyUpdateResult {
+  const updated = [...enemies];
+  const newProjectiles: ProjectileData[] = [];
 
-  const updated: EnemyData = {
-    ...enemy,
-    status: 'Dead',
-    aiState: 'DEAD',
-  };
+  for (let i = 0; i < updated.length; i++) {
+    if (updated[i].status === 'Dead') continue;
 
-  eventBus.emit({
-    type: 'EnemyKilled',
-    enemyId: enemy.id,
-    position: enemy.position,
-    scoreReward: enemy.scoreReward,
-    killedBy: '',
-  });
+    // Build colliders: player + all OTHER living enemies (with current positions)
+    const otherTanks: TankCollider[] = [];
+    otherTanks.push({ id: player.id, x: player.position.x, z: player.position.z });
+    for (let j = 0; j < updated.length; j++) {
+      if (j === i || updated[j].status === 'Dead') continue;
+      otherTanks.push({ id: updated[j].id, x: updated[j].position.x, z: updated[j].position.z });
+    }
 
-  return updated;
-}
+    let enemy = updateEnemyAI(updated[i], player, dt, arenaHalf, obstacles, otherTanks);
 
-export function removeDeadEnemies(enemies: readonly EnemyData[]): EnemyData[] {
-  return enemies.filter((e) => e.status !== 'Dead');
-}
+    if (shouldEnemyFire(enemy, player, obstacles)) {
+      const proj = spawnProjectile(enemy, enemy.weapon, 'Enemy');
+      newProjectiles.push(proj);
+      enemy = consumeEnemyShot(enemy);
+    }
 
-export function countAlive(enemies: readonly EnemyData[]): number {
-  return enemies.filter((e) => e.status !== 'Dead').length;
+    updated[i] = enemy;
+  }
+
+  return { enemies: updated, newProjectiles };
 }

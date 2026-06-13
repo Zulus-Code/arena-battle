@@ -1,11 +1,6 @@
 import { useGameWorldStore } from '@/store/gameWorldStore';
 import { LEVEL_CONFIGS } from '@/config/LevelConfig';
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+import { formatTime } from '@/utils/time';
 
 function healthColor(pct: number): string {
   if (pct > 0.6) return 'bg-green-500';

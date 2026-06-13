@@ -4,12 +4,7 @@ import { initLevel } from '@/game/initLevel';
 import { LEVEL_CONFIGS } from '@/config/LevelConfig';
 import { useGameWorldStore } from '@/store/gameWorldStore';
 import { useUIStore } from '@/store/uiStore';
-
-function formatTime(seconds: number): string {
-  const m = Math.floor(seconds / 60);
-  const s = Math.floor(seconds % 60);
-  return `${m}:${s.toString().padStart(2, '0')}`;
-}
+import { formatTime } from '@/utils/time';
 
 function nextLevel(levelIndex: number): void {
   const next = LEVEL_CONFIGS[levelIndex + 1];

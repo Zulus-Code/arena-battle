@@ -17,7 +17,6 @@ export type GameEvent =
   | ShieldDeactivatedEvent
   | LevelCompletedEvent
   | GameOverEvent
-  | BossSpawnedEvent
   | ExplosionCreatedEvent
   | EnemySpawnedEvent
   | EnemyStateChangedEvent
@@ -96,12 +95,6 @@ export interface GameOverEvent {
   readonly type: 'GameOver';
   readonly score: number;
   readonly reason: 'PlayerDead' | 'TimeUp';
-}
-
-export interface BossSpawnedEvent {
-  readonly type: 'BossSpawned';
-  readonly bossId: string;
-  readonly position: Vec3;
 }
 
 export interface ExplosionCreatedEvent {

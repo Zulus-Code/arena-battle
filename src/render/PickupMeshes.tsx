@@ -6,6 +6,7 @@ import React from 'react';
 import { useFrame } from '@react-three/fiber';
 import { useGameWorldStore } from '@/store/gameWorldStore';
 import type { PickupType } from '@/domain/entities/Pickup';
+import { PICKUP_CONFIGS } from '@/config/PickupConfig';
 import * as THREE from 'three';
 
 export function PickupMeshes() {
@@ -100,16 +101,5 @@ function getPickupGeometry(type: PickupType): React.ReactElement {
 }
 
 function getPickupColor(type: PickupType): string {
-  switch (type) {
-    case 'Health':
-      return '#44dd44';
-    case 'Shield':
-      return '#4488ff';
-    case 'Ammo':
-      return '#dddd44';
-    case 'SpeedBoost':
-      return '#ff44ff';
-    case 'RapidFire':
-      return '#44dddd';
-  }
+  return PICKUP_CONFIGS[type]?.color ?? '#ffffff';
 }

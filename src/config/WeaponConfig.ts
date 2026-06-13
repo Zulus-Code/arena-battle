@@ -42,5 +42,3 @@ export const WEAPON_CONFIGS: Readonly<Record<string, WeaponConfig>> = {
 } as const;
 
 export const DEFAULT_PLAYER_WEAPON = WEAPON_CONFIGS.StandardCannon;
-export const DEFAULT_ENEMY_WEAPON = WEAPON_CONFIGS.StandardCannon;
-export const BOSS_WEAPON = WEAPON_CONFIGS.HeavyCannon;

@@ -3,7 +3,7 @@
 
 import type { EnemyData } from '@/domain/entities/Enemy';
 import type { PickupData } from '@/domain/entities/Pickup';
-import type { LevelConfig } from '@/config/LevelConfig';
+import type { LevelConfig, EnemySpawnConfig } from '@/config/LevelConfig';
 import type { ObstacleData } from '@/domain/entities/Arena';
 import type { Vec3 } from '@/domain/types/CoreTypes';
 import { createHealth } from '@/domain/entities/Health';
@@ -49,7 +49,52 @@ function findValidPosition(
   return { x: 0, z: 0 }; // fallback — center
 }
 
-/** Generate enemy entities from level wave config. Enemies spawn at random positions. */
+/** Generate enemy entities from ONE wave config. */
+export function spawnWave(
+  wave: EnemySpawnConfig,
+  arenaHalf: { readonly x: number; readonly z: number },
+  obstacles: readonly ObstacleData[],
+  placedPositions: { x: number; z: number }[],
+): readonly EnemyData[] {
+  const enemies: EnemyData[] = [];
+  for (let i = 0; i < wave.count; i++) {
+    const enemyCfg = ENEMY_CONFIGS[wave.type];
+    const { x, z } = findValidPosition(
+      { x: arenaHalf.x, z: arenaHalf.z },
+      obstacles,
+      1,
+      placedPositions,
+    );
+    const pos: Vec3 = { x, y: 0.5, z };
+    placedPositions.push({ x, z });
+    const weaponCfg = WEAPON_CONFIGS[enemyCfg.weaponId];
+
+    enemies.push({
+      id: uuidv4(),
+      type: wave.type,
+      faction: 'Enemy',
+      position: pos,
+      rotation: randomService.range(0, Math.PI * 2),
+      velocity: { x: 0, y: 0, z: 0 },
+      health: createHealth(enemyCfg.maxHealth),
+      shield: createShield(),
+      weapon: createWeapon(weaponCfg),
+      status: 'Alive',
+      aiState: 'IDLE',
+      aiTimer: 0,
+      targetId: null,
+      speed: enemyCfg.speed,
+      turnSpeed: enemyCfg.turnSpeed,
+      detectionRange: enemyCfg.detectionRange,
+      attackRange: enemyCfg.attackRange,
+      scoreReward: enemyCfg.scoreReward,
+      isBoss: enemyCfg.isBoss,
+    });
+  }
+  return enemies;
+}
+
+/** Generate enemy entities from ALL wave configs at once (no delay). */
 export function spawnEnemies(
   config: LevelConfig,
   arenaHalf: { readonly x: number; readonly z: number },
@@ -60,43 +105,15 @@ export function spawnEnemies(
   const placedPositions: { x: number; z: number }[] = [];
 
   for (const wave of config.enemyWaves) {
-    for (let i = 0; i < wave.count; i++) {
-      const enemyCfg = ENEMY_CONFIGS[wave.type];
-      const { x, z } = findValidPosition(
-        { x: arenaHalf.x, z: arenaHalf.z },
-        obstacles,
-        1,
-        placedPositions,
-      );
-      const pos: Vec3 = { x, y: 0.5, z };
-      placedPositions.push({ x, z });
-      const weaponCfg = WEAPON_CONFIGS[enemyCfg.weaponId];
-
-      enemies.push({
-        id: uuidv4(),
-        type: wave.type,
-        faction: 'Enemy',
-        position: pos,
-        rotation: randomService.range(0, Math.PI * 2),
-        velocity: { x: 0, y: 0, z: 0 },
-        health: createHealth(enemyCfg.maxHealth),
-        shield: createShield(),
-        weapon: createWeapon(weaponCfg),
-        status: 'Alive',
-        aiState: 'IDLE',
-        aiTimer: 0,
-        targetId: null,
-        speed: enemyCfg.speed,
-        turnSpeed: enemyCfg.turnSpeed,
-        detectionRange: enemyCfg.detectionRange,
-        attackRange: enemyCfg.attackRange,
-        scoreReward: enemyCfg.scoreReward,
-        isBoss: enemyCfg.isBoss,
-      });
-    }
+    enemies.push(...spawnWave(wave, arenaHalf, obstacles, placedPositions));
   }
 
   return enemies;
+}
+
+/** Count how many enemies are still alive */
+export function countAlive(enemies: readonly EnemyData[]): number {
+  return enemies.filter((e) => e.status !== 'Dead').length;
 }
 
 /** Check if a circle at (cx,cz) with given radius overlaps an AABB obstacle */

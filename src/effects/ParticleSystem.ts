@@ -4,6 +4,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import type { Vec3 } from '@/domain/types/CoreTypes';
+import { randomService } from '@/core/RandomService';
 
 export interface ParticleData {
   readonly id: string;
@@ -23,9 +24,9 @@ type MutableParticle = {
 
 function randomVel(speed: number): MutableVec3 {
   return {
-    x: (Math.random() - 0.5) * 2 * speed,
-    y: Math.random() * speed,
-    z: (Math.random() - 0.5) * 2 * speed,
+    x: randomService.range(-speed, speed),
+    y: randomService.range(0, speed),
+    z: randomService.range(-speed, speed),
   };
 }
 

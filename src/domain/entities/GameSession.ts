@@ -29,6 +29,10 @@ export function incrementKills(session: GameSessionData): GameSessionData {
   return { ...session, enemiesKilled: session.enemiesKilled + 1 };
 }
 
+export function incrementShotsHit(session: GameSessionData): GameSessionData {
+  return { ...session, shotsHit: session.shotsHit + 1 };
+}
+
 export function accuracy(session: GameSessionData): number {
   if (session.shotsFired === 0) return 0;
   return session.shotsHit / session.shotsFired;
