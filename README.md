@@ -15,6 +15,7 @@
 
 - **three.js r187** — рендеринг, `WebGPURenderer` с автоматическим откатом на WebGL2 (на Linux-Firefox пока именно WebGL2)
 - **TypeScript + Vite 8** — без React, весь игровой цикл на `requestAnimationFrame`
+- **glTF-модели** — готовые CC0-ассеты вместо примитивов
 - **Node test runner** — детерминированные тесты симуляции
 
 ## Запуск
@@ -32,6 +33,16 @@ npm test            # симуляция: движение, стрельба, у
 npm run build       # прод-сборка в dist/
 ```
 
+## Ассеты
+
+Модели лежат в `public/models/` и подгружаются через `GLTFLoader`:
+
+- `buggy.glb`, `buggy-enemy.glb` — [Kenney Car Kit](https://kenney.nl/assets/car-kit), CC0
+- `tank.glb`, `boss.glb` — [Quaternius Animated Tanks Pack](https://quaternius.com/packs/animatedtanks.html), CC0
+
+Лицензии не требуют атрибуции, но авторы указаны по-человечески. Стрельба, турель и лазерный
+прицел по-прежнему собираются кодом — поверх готового корпуса.
+
 ## Структура
 
 ```
@@ -39,7 +50,8 @@ src/config.ts   все цифры баланса (скорость, HP, урон
 src/rules.ts    чистая геометрия: движение по кругам, столкновения, RNG
 src/game.ts     симуляция: игрок, враги, пули, волны (без three.js)
 src/scene.ts    арена, свет, препятствия
-src/meshes.ts   низкополигональные модели багги
+src/models.ts   загрузка glTF-моделей, нормализация масштаба и ориентации
+src/meshes.ts   вращающаяся пушка-турель на крыше багги
 src/input.ts    клавиатура + мышь
 src/hud.ts      DOM-оверлей: HP, счёт, экраны
 src/main.ts     рендерер, камера, игровой цикл

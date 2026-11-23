@@ -5,7 +5,8 @@ import { BULLET, type EnemyKind } from './config.ts'
 import { createGame, start, update, type Game } from './game.ts'
 import { createHud } from './hud.ts'
 import { createInput, requestLock } from './input.ts'
-import { buildEnemyMesh, buildPlayerMesh, type VehicleView } from './meshes.ts'
+import { buildTurret } from './meshes.ts'
+import { createVehicle, loadVehicles, type VehicleKind, type VehicleView } from './models.ts'
 import { buildArena } from './scene.ts'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!
@@ -25,7 +26,12 @@ const game: Game = createGame(obstacles)
 const input = createInput(canvas)
 const hud = createHud(ui)
 
-const player = buildPlayerMesh()
+const templates = await loadVehicles()
+
+const player = createVehicle(templates, 'buggy')
+const turret = buildTurret(player.height)
+turret.position.y = player.height * 0.85
+player.root.add(turret)
 scene.add(player.root)
 
 // Thin aim beam attached to the turret: shows exactly where bullets go.
@@ -35,10 +41,15 @@ const aimBeam = new THREE.Mesh(
   aimGeo,
   new MeshBasicNodeMaterial({ color: 0xffe066, transparent: true, opacity: 0.4, depthWrite: false }),
 )
-aimBeam.position.set(0, 0.34, -12)
-player.turret.add(aimBeam)
+aimBeam.position.set(0, 0.22 * Math.max(0.6, player.height), -12)
+turret.add(aimBeam)
 
 // Enemies reuse vehicles per kind: spawning is frequent, allocation is not.
+const ENEMY_MODEL: Record<EnemyKind, VehicleKind> = {
+  scout: 'buggyEnemy',
+  tank: 'tank',
+  boss: 'boss',
+}
 const freeByKind: Record<EnemyKind, VehicleView[]> = { scout: [], tank: [], boss: [] }
 const enemyMeshes = new Map<number, VehicleView>()
 const meshKind = new WeakMap<VehicleView, EnemyKind>()
@@ -69,7 +80,7 @@ function syncEnemies(): void {
     let view = enemyMeshes.get(e.id)
     if (!view) {
       const pool = freeByKind[e.kind]
-      view = pool.pop() ?? buildEnemyMesh(e.kind)
+      view = pool.pop() ?? createVehicle(templates, ENEMY_MODEL[e.kind])
       meshKind.set(view, e.kind)
       scene.add(view.root)
       enemyMeshes.set(e.id, view)
@@ -151,7 +162,7 @@ function frame(now: number): void {
   const p = game.player
   player.root.position.set(p.x, 0, p.z)
   player.root.rotation.y = p.yaw
-  player.turret.rotation.y = p.turret
+  turret.rotation.y = p.turret
   syncEnemies()
   syncBullets()
   syncCamera(dt)
