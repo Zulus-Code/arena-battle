@@ -12,7 +12,7 @@ html, body {
 }
 
 body {
-  background: linear-gradient(180deg, #6ec6ff 0%, #a8dcff 45%, #d9f3c2 100%);
+  background: linear-gradient(180deg, #5fb8f5 0%, #9fd6ff 45%, #d9f3c2 100%);
 }
 
 #game {
@@ -30,6 +30,15 @@ body {
   pointer-events: none;
   color: #10233d;
   user-select: none;
+}
+
+/* Soft vignette: keeps the flat-shaded scene from looking like a screenshot of a cube. */
+#ui::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 48%, rgba(10, 25, 45, 0.45) 100%);
 }
 
 .hud-top {
@@ -62,18 +71,6 @@ body {
 .hp-fill.low { background: linear-gradient(90deg, #e74c3c, #ff8a5c); }
 
 .hud-stats { display: flex; gap: 18px; font-size: 15px; }
-
-.crosshair {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  width: 18px;
-  height: 18px;
-  margin: -9px 0 0 -9px;
-  border: 2px solid rgba(16, 35, 61, 0.65);
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.5);
-}
 
 .overlay {
   position: absolute;

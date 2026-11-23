@@ -1,11 +1,11 @@
 import * as THREE from 'three'
-import { MeshLambertNodeMaterial, WebGPURenderer } from 'three/webgpu'
+import { MeshBasicNodeMaterial, MeshLambertNodeMaterial, WebGPURenderer } from 'three/webgpu'
 import './style.css'
 import { BULLET, type EnemyKind } from './config.ts'
 import { createGame, start, update, type Game } from './game.ts'
 import { createHud } from './hud.ts'
 import { createInput, requestLock } from './input.ts'
-import { buildEnemyMesh, buildPlayerMesh } from './meshes.ts'
+import { buildEnemyMesh, buildPlayerMesh, type VehicleView } from './meshes.ts'
 import { buildArena } from './scene.ts'
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!
@@ -25,12 +25,23 @@ const game: Game = createGame(obstacles)
 const input = createInput(canvas)
 const hud = createHud(ui)
 
-const playerMesh = buildPlayerMesh()
-scene.add(playerMesh)
+const player = buildPlayerMesh()
+scene.add(player.root)
 
-// Enemies reuse meshes per kind: spawning is frequent, allocation is not.
-const freeByKind: Record<EnemyKind, THREE.Group[]> = { scout: [], tank: [], boss: [] }
-const enemyMeshes = new Map<number, THREE.Group>()
+// Thin aim beam attached to the turret: shows exactly where bullets go.
+const aimGeo = new THREE.CylinderGeometry(0.035, 0.035, 20, 6)
+aimGeo.rotateX(Math.PI / 2)
+const aimBeam = new THREE.Mesh(
+  aimGeo,
+  new MeshBasicNodeMaterial({ color: 0xffe066, transparent: true, opacity: 0.4, depthWrite: false }),
+)
+aimBeam.position.set(0, 0.34, -12)
+player.turret.add(aimBeam)
+
+// Enemies reuse vehicles per kind: spawning is frequent, allocation is not.
+const freeByKind: Record<EnemyKind, VehicleView[]> = { scout: [], tank: [], boss: [] }
+const enemyMeshes = new Map<number, VehicleView>()
+const meshKind = new WeakMap<VehicleView, EnemyKind>()
 
 const bulletGeo = new THREE.SphereGeometry(0.28, 6, 5)
 function bulletPool(color: number): THREE.InstancedMesh {
@@ -51,28 +62,26 @@ const matrix = new THREE.Matrix4()
 const camFollow = new THREE.Vector3()
 const camTarget = new THREE.Vector3()
 
-const meshKind = new WeakMap<THREE.Group, EnemyKind>()
-
 function syncEnemies(): void {
   const seen = new Set<number>()
   for (const e of game.enemies) {
     seen.add(e.id)
-    let mesh = enemyMeshes.get(e.id)
-    if (!mesh) {
+    let view = enemyMeshes.get(e.id)
+    if (!view) {
       const pool = freeByKind[e.kind]
-      mesh = pool.pop() ?? buildEnemyMesh(e.kind)
-      meshKind.set(mesh, e.kind)
-      scene.add(mesh)
-      enemyMeshes.set(e.id, mesh)
+      view = pool.pop() ?? buildEnemyMesh(e.kind)
+      meshKind.set(view, e.kind)
+      scene.add(view.root)
+      enemyMeshes.set(e.id, view)
     }
-    mesh.position.set(e.x, 0, e.z)
-    mesh.rotation.y = e.yaw
+    view.root.position.set(e.x, 0, e.z)
+    view.root.rotation.y = e.yaw
   }
-  for (const [id, mesh] of enemyMeshes) {
+  for (const [id, view] of enemyMeshes) {
     if (seen.has(id)) continue
-    scene.remove(mesh)
+    scene.remove(view.root)
     enemyMeshes.delete(id)
-    freeByKind[meshKind.get(mesh) ?? 'scout'].push(mesh)
+    freeByKind[meshKind.get(view) ?? 'scout'].push(view)
   }
 }
 
@@ -94,8 +103,8 @@ function syncCamera(dt: number): void {
   const p = game.player
   const fx = -Math.sin(p.yaw)
   const fz = -Math.cos(p.yaw)
-  camFollow.set(p.x - fx * 10, 7.5, p.z - fz * 10)
-  camTarget.set(p.x, 1.2, p.z)
+  camFollow.set(p.x - fx * 9.5, 9.6, p.z - fz * 9.5)
+  camTarget.set(p.x, 1.1, p.z)
   const k = 1 - Math.pow(0.001, dt)
   camera.position.lerp(camFollow, k)
   camera.lookAt(camTarget)
@@ -137,8 +146,10 @@ function frame(now: number): void {
   }
   input.endFrame()
 
-  playerMesh.position.set(game.player.x, 0, game.player.z)
-  playerMesh.rotation.y = game.player.yaw
+  const p = game.player
+  player.root.position.set(p.x, 0, p.z)
+  player.root.rotation.y = p.yaw
+  player.turret.rotation.y = p.turret - p.yaw
   syncEnemies()
   syncBullets()
   syncCamera(dt)

@@ -25,7 +25,10 @@ export interface Enemy {
 export interface PlayerState {
   x: number
   z: number
+  /** Hull heading. */
   yaw: number
+  /** Turret heading, independent of the hull. */
+  turret: number
   hp: number
   cooldown: number
 }
@@ -61,7 +64,7 @@ export interface Game {
 export function createGame(obstacles: readonly Rect[]): Game {
   return {
     phase: 'menu',
-    player: { x: 0, z: 0, yaw: 0, hp: PLAYER.hp, cooldown: 0 },
+    player: { x: 0, z: 0, yaw: 0, turret: 0, hp: PLAYER.hp, cooldown: 0 },
     enemies: [],
     bullets: [],
     obstacles,
@@ -79,7 +82,7 @@ export function createGame(obstacles: readonly Rect[]): Game {
 
 export function start(game: Game): void {
   game.phase = 'playing'
-  game.player = { x: 0, z: 0, yaw: 0, hp: PLAYER.hp, cooldown: 0 }
+  game.player = { x: 0, z: 0, yaw: 0, turret: 0, hp: PLAYER.hp, cooldown: 0 }
   game.enemies.length = 0
   game.bullets.length = 0
   game.score = 0
@@ -130,34 +133,35 @@ export function update(game: Game, dt: number, input: Input): void {
   if (game.phase !== 'playing') return
   const p = game.player
 
-  p.yaw += input.yawDelta
+  // Hull: A/D steer, W/S drive. The vehicle never slides sideways.
+  if (input.left) p.yaw += PLAYER.turnSpeed * dt
+  if (input.right) p.yaw -= PLAYER.turnSpeed * dt
+  p.turret += input.yawDelta
   p.cooldown -= dt
   game.shake = Math.max(0, game.shake - dt * 2.5)
 
-  // --- player movement (camera-relative on the XZ plane) ---
   const sin = Math.sin(p.yaw)
   const cos = Math.cos(p.yaw)
-  let mx = 0
-  let mz = 0
-  if (input.forward) { mx -= sin; mz -= cos }
-  if (input.back) { mx += sin; mz += cos }
-  if (input.left) { mx -= cos; mz += sin }
-  if (input.right) { mx += cos; mz -= sin }
-  const len = Math.hypot(mx, mz)
-  if (len > 0) {
-    const step = (PLAYER.speed * dt) / len
-    const next = moveCircle(p, mx * step, mz * step, PLAYER.radius, ARENA.half, game.obstacles)
+  let drive = 0
+  if (input.forward) drive += 1
+  if (input.back) drive -= 1
+  if (drive !== 0) {
+    const step = PLAYER.speed * dt * drive
+    const next = moveCircle(p, -sin * step, -cos * step, PLAYER.radius, ARENA.half, game.obstacles)
     p.x = next.x
     p.z = next.z
   }
 
+  // Turret fires wherever it points, not where the hull points.
   if (input.firing && p.cooldown <= 0) {
     p.cooldown = PLAYER.fireDelay
+    const tsin = Math.sin(p.turret)
+    const tcos = Math.cos(p.turret)
     pushBullet(game, {
-      x: p.x - sin * 1.6,
-      z: p.z - cos * 1.6,
-      vx: -sin * PLAYER.bulletSpeed,
-      vz: -cos * PLAYER.bulletSpeed,
+      x: p.x - tsin * 1.6,
+      z: p.z - tcos * 1.6,
+      vx: -tsin * PLAYER.bulletSpeed,
+      vz: -tcos * PLAYER.bulletSpeed,
       life: BULLET.life,
       damage: PLAYER.damage,
       hostile: false,

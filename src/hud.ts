@@ -13,10 +13,9 @@ export function createHud(root: HTMLElement): Hud {
         <span data-wave>Волна 1</span>
       </div>
     </div>
-    <div class="crosshair" data-cross></div>
     <div class="overlay" data-menu>
       <h1>ARENA BATTLE</h1>
-      <p>WASD — ехать · мышь — башня · ЛКМ / Space — огонь</p>
+      <p>W/S — газ · A/D — руль · мышь — башня · ЛКМ / Space — огонь</p>
       <p class="big">Клик — в бой</p>
     </div>
     <div class="overlay hide" data-over>
@@ -29,7 +28,6 @@ export function createHud(root: HTMLElement): Hud {
   const hp = root.querySelector<HTMLElement>('[data-hp]')!
   const score = root.querySelector<HTMLElement>('[data-score]')!
   const wave = root.querySelector<HTMLElement>('[data-wave]')!
-  const cross = root.querySelector<HTMLElement>('[data-cross]')!
   const menu = root.querySelector<HTMLElement>('[data-menu]')!
   const over = root.querySelector<HTMLElement>('[data-over]')!
   const final = root.querySelector<HTMLElement>('[data-final]')!
@@ -59,7 +57,6 @@ export function createHud(root: HTMLElement): Hud {
         lastPhase = game.phase
         menu.classList.toggle('hide', game.phase !== 'menu')
         over.classList.toggle('hide', game.phase !== 'over')
-        cross.classList.toggle('hide', game.phase !== 'playing')
         if (game.phase === 'over') {
           final.textContent = `Счёт: ${game.score} · волн пройдено: ${Math.max(0, game.wave - 1)}`
         }

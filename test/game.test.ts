@@ -20,9 +20,42 @@ test('player bullets kill an enemy standing straight ahead', () => {
 test('player cannot drive through the arena wall', () => {
   const g = createGame([])
   start(g)
-  const input: Input = { ...idle, forward: true }
-  for (let i = 0; i < 600; i++) update(g, 1 / 60, input)
+  for (let i = 0; i < 600; i++) update(g, 1 / 60, { ...idle, forward: true })
   assert.ok(Math.abs(g.player.z) <= 22, `player escaped the arena: ${g.player.z}`)
+})
+
+test('A/D turn the hull without moving it', () => {
+  const g = createGame([])
+  start(g)
+  update(g, 1 / 60, { ...idle, left: true })
+  assert.ok(g.player.yaw > 0, 'left should increase yaw')
+  assert.equal(g.player.x, 0)
+  assert.equal(g.player.z, 0)
+
+  const yaw = g.player.yaw
+  update(g, 1 / 60, { ...idle, right: true })
+  assert.ok(g.player.yaw < yaw, 'right should decrease yaw')
+})
+
+test('driving forward follows the hull heading, not a fixed axis', () => {
+  const g = createGame([])
+  start(g)
+  g.player.yaw = Math.PI / 2 // facing -X
+  update(g, 1 / 60, { ...idle, forward: true })
+  assert.ok(g.player.x < 0, `expected to move towards -X, got x=${g.player.x}`)
+})
+
+test('turret aims independently of the hull', () => {
+  const g = createGame([])
+  start(g)
+  g.enemies.length = 0
+  g.toSpawn = 0
+  g.enemies.push({ id: 7, kind: 'scout', x: 0, z: 8, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+
+  // enemy sits behind the hull: only the turret is turned around and fires
+  g.player.turret = Math.PI
+  for (let i = 0; i < 200; i++) update(g, 1 / 60, { ...idle, firing: true })
+  assert.equal(g.enemies.some((e) => e.id === 7), false)
 })
 
 test('damage from an enemy bullet reduces player hp', () => {
