@@ -27,7 +27,7 @@ export interface PlayerState {
   z: number
   /** Hull heading. */
   yaw: number
-  /** Turret heading, independent of the hull. */
+  /** Turret offset from the hull heading (0 = straight ahead). */
   turret: number
   hp: number
   cooldown: number
@@ -152,11 +152,12 @@ export function update(game: Game, dt: number, input: Input): void {
     p.z = next.z
   }
 
-  // Turret fires wherever it points, not where the hull points.
+  // Turret fires at its own angle over the hull heading.
   if (input.firing && p.cooldown <= 0) {
     p.cooldown = PLAYER.fireDelay
-    const tsin = Math.sin(p.turret)
-    const tcos = Math.cos(p.turret)
+    const aim = p.yaw + p.turret
+    const tsin = Math.sin(aim)
+    const tcos = Math.cos(aim)
     pushBullet(game, {
       x: p.x - tsin * 1.6,
       z: p.z - tcos * 1.6,

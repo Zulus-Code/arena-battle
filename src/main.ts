@@ -142,6 +142,8 @@ function frame(now: number): void {
   input.beginFrame()
   while (acc >= STEP) {
     update(game, STEP, input.state)
+    // mouse delta belongs to the frame, not to every fixed step
+    input.state.yawDelta = 0
     acc -= STEP
   }
   input.endFrame()
@@ -149,7 +151,7 @@ function frame(now: number): void {
   const p = game.player
   player.root.position.set(p.x, 0, p.z)
   player.root.rotation.y = p.yaw
-  player.turret.rotation.y = p.turret - p.yaw
+  player.turret.rotation.y = p.turret
   syncEnemies()
   syncBullets()
   syncCamera(dt)

@@ -12,9 +12,9 @@ function checkerTexture(): THREE.CanvasTexture {
   const c = document.createElement('canvas')
   c.width = c.height = size * 2
   const g = c.getContext('2d')!
-  g.fillStyle = '#6fcf5f'
+  g.fillStyle = '#c9b98c'
   g.fillRect(0, 0, size * 2, size * 2)
-  g.fillStyle = '#63c154'
+  g.fillStyle = '#c0b081'
   g.fillRect(0, 0, size, size)
   g.fillRect(size, size, size, size)
   const tex = new THREE.CanvasTexture(c)
@@ -28,7 +28,7 @@ function checkerTexture(): THREE.CanvasTexture {
 function shadowBlob(x: number, z: number, radius: number): THREE.Mesh {
   const blob = new THREE.Mesh(
     new THREE.CircleGeometry(radius, 16),
-    new MeshBasicNodeMaterial({ color: 0x14300f, transparent: true, opacity: 0.2, depthWrite: false }),
+    new MeshBasicNodeMaterial({ color: 0x2f2c22, transparent: true, opacity: 0.24, depthWrite: false }),
   )
   blob.rotation.x = -Math.PI / 2
   blob.position.set(x, 0.02, z)
@@ -51,15 +51,15 @@ function wallTexture(): THREE.CanvasTexture {
   c.width = 256
   c.height = 128
   const g = c.getContext('2d')!
-  g.fillStyle = '#4d96ff'
+  g.fillStyle = '#6d8ba6'
   g.fillRect(0, 0, 256, 128)
   for (let i = 0; i < 8; i++) {
-    g.fillStyle = i % 2 ? '#478de8' : '#55a1ff'
+    g.fillStyle = i % 2 ? '#64829d' : '#7492ad'
     g.fillRect(i * 32 + 2, 0, 28, 128)
   }
-  g.fillStyle = '#3a7ac9'
+  g.fillStyle = '#54708a'
   g.fillRect(0, 108, 256, 6)
-  g.fillStyle = '#6fb4ff'
+  g.fillStyle = '#86a2bd'
   g.fillRect(0, 0, 256, 5)
   const tex = new THREE.CanvasTexture(c)
   tex.wrapS = tex.wrapT = THREE.RepeatWrapping
@@ -69,14 +69,14 @@ function wallTexture(): THREE.CanvasTexture {
 }
 
 const PROPS: PropSpec[] = [
-  { kind: 'crate', x: -10, z: -8, hx: 1.2, hz: 1.2, height: 1.6, color: 0xc98a4b },
-  { kind: 'crate', x: 10, z: -10, hx: 1.4, hz: 1.4, height: 1.8, color: 0xc98a4b },
-  { kind: 'crate', x: -6, z: -2, hx: 1.2, hz: 1.2, height: 1.5, color: 0xd39a55 },
-  { kind: 'block', x: 0, z: 6, hx: 1.6, hz: 1.6, height: 2.6, color: 0x6b7a8f },
-  { kind: 'block', x: 12, z: 9, hx: 2.0, hz: 2.4, height: 2.2, color: 0x7c8aa0 },
-  { kind: 'barrel', x: -13, z: 10, hx: 0.8, hz: 0.8, height: 2.0, color: 0xe74c3c },
-  { kind: 'barrel', x: 8, z: 3, hx: 0.8, hz: 0.8, height: 2.0, color: 0x2ecc71 },
-  { kind: 'barrel', x: 5, z: -3, hx: 0.8, hz: 0.8, height: 2.0, color: 0x3498db },
+  { kind: 'crate', x: -10, z: -8, hx: 1.2, hz: 1.2, height: 1.6, color: 0xa97b46 },
+  { kind: 'crate', x: 10, z: -10, hx: 1.4, hz: 1.4, height: 1.8, color: 0xb28652 },
+  { kind: 'crate', x: -6, z: -2, hx: 1.2, hz: 1.2, height: 1.5, color: 0x9e7342 },
+  { kind: 'block', x: 0, z: 6, hx: 1.6, hz: 1.6, height: 2.6, color: 0x828a92 },
+  { kind: 'block', x: 12, z: 9, hx: 2.0, hz: 2.4, height: 2.2, color: 0x8d949c },
+  { kind: 'barrel', x: -13, z: 10, hx: 0.8, hz: 0.8, height: 2.0, color: 0xb5544a },
+  { kind: 'barrel', x: 8, z: 3, hx: 0.8, hz: 0.8, height: 2.0, color: 0x6f8f5e },
+  { kind: 'barrel', x: 5, z: -3, hx: 0.8, hz: 0.8, height: 2.0, color: 0x5f7d99 },
 ]
 
 function addProp(scene: THREE.Scene, p: PropSpec): void {
@@ -97,7 +97,7 @@ function addProp(scene: THREE.Scene, p: PropSpec): void {
     body.position.set(p.x, p.height / 2, p.z)
     scene.add(body)
     if (p.kind === 'crate') {
-      const plank = flat(0x8a5a2b)
+      const plank = flat(0x7d5628)
       for (const y of [p.height * 0.3, p.height * 0.7]) {
         const strip = new THREE.Mesh(new THREE.BoxGeometry(p.hx * 2.02, 0.14, p.hz * 2.02), plank)
         strip.position.set(p.x, y, p.z)
@@ -121,7 +121,7 @@ export function buildArena(scene: THREE.Scene): Rect[] {
   scene.add(floor)
 
   const wallLower = new MeshLambertNodeMaterial({ map: wallTexture() })
-  const cornice = flat(0xffd166)
+  const cornice = flat(0xcbb282)
   const hWall = new THREE.BoxGeometry(half * 2 + wallT * 2, wallH, wallT)
   const vWall = new THREE.BoxGeometry(wallT, wallH, half * 2 + wallT * 2)
   const walls: Array<[THREE.BoxGeometry, number, number]> = [
@@ -149,14 +149,14 @@ export function buildArena(scene: THREE.Scene): Rect[] {
   // Corner pillars break the endless-wall look.
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
-      const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.3, wallH + 0.9, 1.3), flat(0x2d3038))
+      const pillar = new THREE.Mesh(new THREE.BoxGeometry(1.3, wallH + 0.9, 1.3), flat(0x4a5058))
       pillar.position.set(sx * (half + wallT / 2), (wallH + 0.9) / 2, sz * (half + wallT / 2))
       scene.add(pillar)
     }
   }
 
   // Painted border line on the floor.
-  const lineMat = flat(0xf2f2f2)
+  const lineMat = flat(0xe3ddcc)
   const edge = half - 0.5
   for (const [w, d, x, z] of [
     [half * 2 - 1, 0.5, 0, -edge],
@@ -175,11 +175,11 @@ export function buildArena(scene: THREE.Scene): Rect[] {
     rects.push({ x: p.x, z: p.z, hx: p.hx, hz: p.hz })
   }
 
-  scene.add(new THREE.HemisphereLight(0xffffff, 0x6a8f5a, 1.4))
-  const sun = new THREE.DirectionalLight(0xfff1cc, 2.6)
+  scene.add(new THREE.HemisphereLight(0xfff6e8, 0x6a7a5a, 1.15))
+  const sun = new THREE.DirectionalLight(0xfff1cc, 1.9)
   sun.position.set(18, 30, 12)
   scene.add(sun)
-  const fill = new THREE.DirectionalLight(0xbfe3ff, 0.8)
+  const fill = new THREE.DirectionalLight(0xbfe3ff, 0.45)
   fill.position.set(-14, 12, -18)
   scene.add(fill)
 

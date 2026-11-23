@@ -12,7 +12,7 @@ html, body {
 }
 
 body {
-  background: linear-gradient(180deg, #5fb8f5 0%, #9fd6ff 45%, #d9f3c2 100%);
+  background: linear-gradient(180deg, #a8cbe0 0%, #cfe2ea 45%, #e6e1c9 100%);
 }
 
 #game {
@@ -64,11 +64,11 @@ body {
   height: 100%;
   width: 100%;
   border-radius: 8px;
-  background: linear-gradient(90deg, #2ecc71, #7dff8a);
+  background: linear-gradient(90deg, #5f9e6a, #8cc48a);
   transition: width 0.12s linear;
 }
 
-.hp-fill.low { background: linear-gradient(90deg, #e74c3c, #ff8a5c); }
+.hp-fill.low { background: linear-gradient(90deg, #b5504a, #d98a5c); }
 
 .hud-stats { display: flex; gap: 18px; font-size: 15px; }
 

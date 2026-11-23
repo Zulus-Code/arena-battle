@@ -25,9 +25,9 @@ export interface EnemyStats {
 }
 
 export const ENEMIES: Record<EnemyKind, EnemyStats> = {
-  scout: { hp: 30, speed: 8, radius: 0.9, color: 0xff5a3c, fireDelay: 1.3, bulletSpeed: 26, damage: 8, score: 100, range: 30 },
-  tank: { hp: 90, speed: 4.5, radius: 1.4, color: 0xffb020, fireDelay: 2.0, bulletSpeed: 22, damage: 18, score: 250, range: 26 },
-  boss: { hp: 420, speed: 3.4, radius: 2.2, color: 0xb44cff, fireDelay: 0.9, bulletSpeed: 28, damage: 14, score: 2000, range: 34 },
+  scout: { hp: 30, speed: 8, radius: 0.9, color: 0xc9634a, fireDelay: 1.3, bulletSpeed: 26, damage: 8, score: 100, range: 30 },
+  tank: { hp: 90, speed: 4.5, radius: 1.4, color: 0xc79546, fireDelay: 2.0, bulletSpeed: 22, damage: 18, score: 250, range: 26 },
+  boss: { hp: 420, speed: 3.4, radius: 2.2, color: 0x8f6fae, fireDelay: 0.9, bulletSpeed: 28, damage: 14, score: 2000, range: 34 },
 }
 
 export const WAVE = { baseCount: 4, growth: 2, spawnGap: 1.1, interWave: 3 } as const

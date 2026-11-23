@@ -58,6 +58,29 @@ test('turret aims independently of the hull', () => {
   assert.equal(g.enemies.some((e) => e.id === 7), false)
 })
 
+test('turret offset is relative to the hull and stays put when the mouse is idle', () => {
+  const g = createGame([])
+  start(g)
+  update(g, 1 / 60, { ...idle, yawDelta: 0.5 })
+  assert.equal(g.player.turret, 0.5)
+
+  const offset = g.player.turret
+  for (let i = 0; i < 60; i++) update(g, 1 / 60, { ...idle, left: true })
+  assert.equal(g.player.turret, offset, 'hull turn must not change the turret offset')
+})
+
+test('bullets follow the hull heading when the turret offset is zero', () => {
+  const g = createGame([])
+  start(g)
+  g.enemies.length = 0
+  g.toSpawn = 0
+  g.player.yaw = Math.PI / 2 // hull faces -X
+  g.enemies.push({ id: 5, kind: 'scout', x: -8, z: 0, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+
+  for (let i = 0; i < 120; i++) update(g, 1 / 60, { ...idle, firing: true })
+  assert.equal(g.enemies.some((e) => e.id === 5), false)
+})
+
 test('damage from an enemy bullet reduces player hp', () => {
   const g = createGame([])
   start(g)
