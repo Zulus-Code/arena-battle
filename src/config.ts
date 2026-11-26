@@ -15,10 +15,6 @@ export const PLAYER_VEHICLES: Record<PlayerVehicleKind, PlayerVehicleStats> = {
 }
 
 export const PLAYER = {
-  speed: 15,
-  hp: 100,
-  radius: 1.1,
-  turnSpeed: 2.8,
   fireDelay: 0.16,
   bulletSpeed: 55,
   damage: 12,

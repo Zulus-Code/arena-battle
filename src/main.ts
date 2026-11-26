@@ -199,6 +199,9 @@ const PLAYER_MODEL: Record<PlayerVehicleKind, VehicleKind> = {
 
 function buildPlayerModel(kind: PlayerVehicleKind): { view: VehicleView; turret: TurretView } {
   const view = createVehicle(templates, PLAYER_MODEL[kind])
+  // Hide the hull-fixed cannon on the player's tank so only the mouse-aimed turret barrel is visible.
+  const nativeGun = view.root.getObjectByName('Tank_Gun')
+  if (nativeGun) nativeGun.visible = false
   const t = buildTurret(view.height)
   t.root.position.y = view.height * 0.85
   view.tiltGroup.add(t.root)
