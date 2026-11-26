@@ -6,6 +6,7 @@ import type { Bullet } from './game.ts'
 
 const FRIENDLY_COLOR = 0xffe56b
 const HOSTILE_COLOR = 0xff4f73
+const BASE_RADIUS = 0.3
 const BULLET_Y = 0.9
 const TRAIL_LENGTH = 6
 const TRAIL_STEP = 0.32
@@ -86,11 +87,9 @@ function uploadInstancedBuffers(mesh: THREE.InstancedMesh, count: number): void 
  * emissive core sphere, camera-facing radial glow billboard, and fading circular-buffer trail.
  */
 export function createBulletSystem(scene: THREE.Scene): BulletSystem {
-  const radius = BULLET.radius
-
   const coreMesh = makeInstancedPool(
     scene,
-    new THREE.SphereGeometry(radius, 12, 10),
+    new THREE.SphereGeometry(BASE_RADIUS, 12, 10),
     new MeshStandardNodeMaterial({
       color: 0xffffff,
       roughness: 0.2,
@@ -103,7 +102,7 @@ export function createBulletSystem(scene: THREE.Scene): BulletSystem {
 
   const glowMesh = makeInstancedPool(
     scene,
-    new THREE.PlaneGeometry(radius * 3.2, radius * 3.2),
+    new THREE.PlaneGeometry(BASE_RADIUS * 3.2, BASE_RADIUS * 3.2),
     new MeshBasicNodeMaterial({
       map: getGlowTexture(),
       transparent: true,
@@ -120,7 +119,7 @@ export function createBulletSystem(scene: THREE.Scene): BulletSystem {
   trailAlphaAttr.setUsage(THREE.DynamicDrawUsage)
   const trailMesh = makeInstancedPool(
     scene,
-    new THREE.SphereGeometry(radius, 8, 6),
+    new THREE.SphereGeometry(BASE_RADIUS, 8, 6),
     new MeshBasicNodeMaterial({
       transparent: true,
       opacityNode: instancedDynamicBufferAttribute(trailAlphaAttr, 'float'),
@@ -147,7 +146,7 @@ export function createBulletSystem(scene: THREE.Scene): BulletSystem {
   const matrix = new THREE.Matrix4()
   const pos = new THREE.Vector3()
   const idQuat = new THREE.Quaternion()
-  const unitScale = new THREE.Vector3(1, 1, 1)
+  const bulletScale = new THREE.Vector3()
   const trailScale = new THREE.Vector3()
   const friendlyCol = new THREE.Color(FRIENDLY_COLOR)
   const hostileCol = new THREE.Color(HOSTILE_COLOR)
@@ -220,13 +219,15 @@ export function createBulletSystem(scene: THREE.Scene): BulletSystem {
       for (let i = 0; i < bulletCount; i++) {
         const b = bullets[i]
         const col = b.hostile ? hostileCol : friendlyCol
+        const scl = b.radius / BASE_RADIUS
 
         pos.set(b.x, BULLET_Y, b.z)
-        matrix.compose(pos, idQuat, unitScale)
+        bulletScale.setScalar(scl)
+        matrix.compose(pos, idQuat, bulletScale)
         coreMesh.setMatrixAt(i, matrix)
         coreMesh.setColorAt(i, col)
 
-        matrix.compose(pos, camera.quaternion, unitScale)
+        matrix.compose(pos, camera.quaternion, bulletScale)
         glowMesh.setMatrixAt(i, matrix)
         glowMesh.setColorAt(i, col)
 
@@ -240,7 +241,7 @@ export function createBulletSystem(scene: THREE.Scene): BulletSystem {
           if (trailCount >= MAX_TRAIL) break
           const idx = (slot.head - k + TRAIL_LENGTH) % TRAIL_LENGTH
           const frac = k / TRAIL_LENGTH
-          const s = (1 - frac) * 0.72 + 0.12
+          const s = ((1 - frac) * 0.72 + 0.12) * scl
           pos.set(slot.xs[idx], BULLET_Y, slot.zs[idx])
           trailScale.setScalar(s)
           matrix.compose(pos, idQuat, trailScale)

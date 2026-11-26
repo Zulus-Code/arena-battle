@@ -36,11 +36,15 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
       <div class="vehicle-picker" role="group" aria-label="Выбор техники">
         <button type="button" class="vehicle-btn active" data-vehicle="buggy">
           <span class="vehicle-name">Багги</span>
-          <span class="vehicle-meta">Быстрый · 100 HP</span>
+          <span class="vehicle-meta">Быстрый · 90 HP</span>
         </button>
         <button type="button" class="vehicle-btn" data-vehicle="tank">
           <span class="vehicle-name">Танк</span>
           <span class="vehicle-meta">Броня · 160 HP</span>
+        </button>
+        <button type="button" class="vehicle-btn" data-vehicle="heavy">
+          <span class="vehicle-name">Тяжёлый танк</span>
+          <span class="vehicle-meta">Тяжёлый · 240 HP</span>
         </button>
       </div>
       <p>W/S — газ · A/D — руль · мышь — камера и башня · ЛКМ / Space — огонь · G — тени · Esc — пауза</p>

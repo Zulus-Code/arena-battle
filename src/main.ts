@@ -103,7 +103,10 @@ const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerH
 const { obstacles, sun } = buildArena(scene)
 let selectedVehicle: PlayerVehicleKind = 'buggy'
 try {
-  if (localStorage.getItem('arena-vehicle') === 'tank') selectedVehicle = 'tank'
+  const savedVehicle = localStorage.getItem('arena-vehicle')
+  if (savedVehicle && Object.hasOwn(PLAYER_VEHICLES, savedVehicle)) {
+    selectedVehicle = savedVehicle as PlayerVehicleKind
+  }
 } catch {
   // Ignore storage access errors in restricted environments.
 }
@@ -195,6 +198,13 @@ const templates = await loadVehicles()
 const PLAYER_MODEL: Record<PlayerVehicleKind, VehicleKind> = {
   buggy: 'buggy',
   tank: 'tank',
+  heavy: 'boss',
+}
+
+const CAMERA_SCALE: Record<PlayerVehicleKind, number> = {
+  buggy: 1,
+  tank: 1,
+  heavy: 6.2 / 4.6,
 }
 
 function buildPlayerModel(kind: PlayerVehicleKind): { view: VehicleView; turret: TurretView } {
@@ -203,7 +213,8 @@ function buildPlayerModel(kind: PlayerVehicleKind): { view: VehicleView; turret:
   const nativeGun = view.root.getObjectByName('Tank_Gun')
   if (nativeGun) nativeGun.visible = false
   const t = buildTurret(view.height)
-  t.root.position.y = view.height * 0.85
+  // On boss.glb, Tank_Gun sticks above the hull roof, so seat the custom turret on the hull top instead of floating.
+  t.root.position.y = view.height * (kind === 'heavy' ? 0.72 : 0.85)
   view.tiltGroup.add(t.root)
   return { view, turret: t }
 }
@@ -211,6 +222,7 @@ function buildPlayerModel(kind: PlayerVehicleKind): { view: VehicleView; turret:
 const playerModels: Record<PlayerVehicleKind, { view: VehicleView; turret: TurretView }> = {
   buggy: buildPlayerModel('buggy'),
   tank: buildPlayerModel('tank'),
+  heavy: buildPlayerModel('heavy'),
 }
 
 let player = playerModels[selectedVehicle].view
@@ -320,7 +332,7 @@ function handleEvents(events: FxEvent[]): void {
         const muzzleDist = -turret.muzzleZ
         const mx = game.player.x - Math.sin(aim) * muzzleDist
         const mz = game.player.z - Math.cos(aim) * muzzleDist
-        fx.spawnMuzzle(mx, player.height * 0.85 + turret.muzzleY, mz, dx, dz, false)
+        fx.spawnMuzzle(mx, turret.root.position.y + turret.muzzleY, mz, dx, dz, false)
       } else {
         const enemyVis = enemyVisuals.get(ev.ownerId)
         if (enemyVis) enemyVis.recoil = 1
@@ -491,8 +503,9 @@ function syncCamera(dt: number, alpha: number): void {
   const rturret = lerpAngle(prevPlayer.turret, p.turret, alpha)
   const fxDir = -Math.sin(rturret)
   const fzDir = -Math.cos(rturret)
-  camFollow.set(rx - fxDir * 9.2, 9.2, rz - fzDir * 9.2)
-  camTarget.set(rx + fxDir * 2.0, 1.0, rz + fzDir * 2.0)
+  const camScale = CAMERA_SCALE[game.vehicle]
+  camFollow.set(rx - fxDir * 9.2 * camScale, 9.2 * camScale, rz - fzDir * 9.2 * camScale)
+  camTarget.set(rx + fxDir * 2.0 * camScale, 1.0, rz + fzDir * 2.0 * camScale)
   const k = 1 - Math.pow(0.00005, dt)
   camera.position.lerp(camFollow, k)
   camera.lookAt(camTarget)

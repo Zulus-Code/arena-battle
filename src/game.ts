@@ -2,7 +2,6 @@ import {
   ARENA,
   BULLET,
   ENEMIES,
-  PLAYER,
   PLAYER_VEHICLES,
   WAVE,
   type EnemyKind,
@@ -17,6 +16,7 @@ export interface Bullet {
   vz: number
   life: number
   damage: number
+  radius: number
   hostile: boolean
 }
 
@@ -204,21 +204,23 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
 
   // Turret aims in world coordinates independently of hull steering.
   if (input.firing && p.cooldown <= 0) {
-    p.cooldown = PLAYER.fireDelay
+    p.cooldown = playerStats.fireDelay
     const aim = p.turret
     const tsin = Math.sin(aim)
     const tcos = Math.cos(aim)
-    const bx = p.x - tsin * 1.6
-    const bz = p.z - tcos * 1.6
-    const vx = -tsin * PLAYER.bulletSpeed
-    const vz = -tcos * PLAYER.bulletSpeed
+    const spawnOffset = (playerStats.radius / PLAYER_VEHICLES.buggy.radius) * 1.6
+    const bx = p.x - tsin * spawnOffset
+    const bz = p.z - tcos * spawnOffset
+    const vx = -tsin * playerStats.bulletSpeed
+    const vz = -tcos * playerStats.bulletSpeed
     pushBullet(game, {
       x: bx,
       z: bz,
       vx,
       vz,
       life: BULLET.life,
-      damage: PLAYER.damage,
+      damage: playerStats.damage,
+      radius: playerStats.bulletRadius,
       hostile: false,
     })
     events?.push({ kind: 'shot', hostile: false, ownerId: 0, x: bx, z: bz, vx, vz })
@@ -251,6 +253,7 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
         vz,
         life: 3,
         damage: stats.damage,
+        radius: stats.bulletRadius,
         hostile: true,
       })
       events?.push({ kind: 'shot', hostile: true, ownerId: e.id, x: e.x, z: e.z, vx, vz })
@@ -288,7 +291,7 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
   for (const b of game.bullets) {
     if (b.life <= 0) continue
     if (b.hostile) {
-      if (circlesHit(b.x, b.z, BULLET.radius, p.x, p.z, playerStats.radius)) {
+      if (circlesHit(b.x, b.z, b.radius, p.x, p.z, playerStats.radius)) {
         p.hp -= b.damage
         b.life = 0
         game.shake = 0.35
@@ -297,7 +300,7 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
     } else {
       for (const e of game.enemies) {
         if (e.hp <= 0) continue
-        if (circlesHit(b.x, b.z, BULLET.radius, e.x, e.z, ENEMIES[e.kind].radius)) {
+        if (circlesHit(b.x, b.z, b.radius, e.x, e.z, ENEMIES[e.kind].radius)) {
           e.hp -= b.damage
           b.life = 0
           const killed = e.hp <= 0

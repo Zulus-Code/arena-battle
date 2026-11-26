@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { PLAYER_VEHICLES } from '../src/config.ts'
+import { ARENA, ENEMIES, PLAYER_VEHICLES, type PlayerVehicleKind } from '../src/config.ts'
 import { createGame, pause, resume, returnToMenu, setVehicle, start, update, type FxEvent, type Input } from '../src/game.ts'
 
 const idle: Input = { forward: false, back: false, left: false, right: false, firing: false, yawDelta: 0 }
@@ -89,7 +89,7 @@ test('damage from an enemy bullet reduces player hp', () => {
   start(g)
   g.enemies.length = 0
   g.toSpawn = 0
-  g.bullets.push({ x: 0, z: -2, vx: 0, vz: 20, life: 1, damage: 15, hostile: true })
+  g.bullets.push({ x: 0, z: -2, vx: 0, vz: 20, life: 1, damage: 15, radius: 0.3, hostile: true })
   const before = g.player.hp
   for (let i = 0; i < 20; i++) update(g, 1 / 60, idle)
   assert.equal(g.player.hp, before - 15)
@@ -109,8 +109,8 @@ test('update emits shot, enemyHit, wallHit and playerHit events when buffer is p
   assert.ok(events.some((e) => e.kind === 'enemyHit' && e.id === 42 && e.killed))
 
   events.length = 0
-  g.bullets.push({ x: 3.1, z: 0, vx: 60, vz: 0, life: 1, damage: 10, hostile: false })
-  g.bullets.push({ x: 0, z: -0.5, vx: 0, vz: 60, life: 1, damage: 10, hostile: true })
+  g.bullets.push({ x: 3.1, z: 0, vx: 60, vz: 0, life: 1, damage: 10, radius: 0.3, hostile: false })
+  g.bullets.push({ x: 0, z: -0.5, vx: 0, vz: 60, life: 1, damage: 10, radius: 0.3, hostile: true })
   update(g, 1 / 60, idle, events)
 
   assert.ok(events.some((e) => e.kind === 'wallHit'))
@@ -121,7 +121,7 @@ test('update() in paused does not move player, bullets, cooldowns or spawn enemi
   const g = createGame([])
   start(g)
   g.player.cooldown = 0.5
-  g.bullets.push({ x: 0, z: -3, vx: 0, vz: -50, life: 1, damage: 10, hostile: false })
+  g.bullets.push({ x: 0, z: -3, vx: 0, vz: -50, life: 1, damage: 10, radius: 0.3, hostile: false })
   const enemyCountBefore = g.enemies.length
   const toSpawnBefore = g.toSpawn
   const spawnTimerBefore = g.spawnTimer
@@ -184,7 +184,7 @@ test('start() with tank gives tank hp and speed, while buggy keeps original valu
   assert.equal(buggyGame.vehicle, 'buggy')
   assert.equal(buggyGame.player.hp, PLAYER_VEHICLES.buggy.hp)
   assert.equal(buggyGame.player.maxHp, PLAYER_VEHICLES.buggy.hp)
-  assert.equal(buggyGame.player.hp, 100)
+  assert.equal(buggyGame.player.hp, 90)
 
   const tankGame = createGame([], 'buggy')
   start(tankGame, 'tank')
@@ -214,8 +214,8 @@ test('start() with tank gives tank hp and speed, while buggy keeps original valu
   buggyGame.toSpawn = 0
   tankGame.enemies.length = 0
   tankGame.toSpawn = 0
-  buggyGame.bullets.push({ x: buggyGame.player.x, z: buggyGame.player.z, vx: 0, vz: 0, life: 1, damage: 110, hostile: true })
-  tankGame.bullets.push({ x: tankGame.player.x, z: tankGame.player.z, vx: 0, vz: 0, life: 1, damage: 110, hostile: true })
+  buggyGame.bullets.push({ x: buggyGame.player.x, z: buggyGame.player.z, vx: 0, vz: 0, life: 1, damage: 110, radius: 0.3, hostile: true })
+  tankGame.bullets.push({ x: tankGame.player.x, z: tankGame.player.z, vx: 0, vz: 0, life: 1, damage: 110, radius: 0.3, hostile: true })
   update(buggyGame, 1 / 60, idle)
   update(tankGame, 1 / 60, idle)
   assert.equal(buggyGame.phase, 'over')
@@ -238,4 +238,143 @@ test('setVehicle() updates chosen vehicle in menu and preserves it across restar
   // Calling setVehicle while playing should not mutate active match vehicle.
   setVehicle(g, 'buggy')
   assert.equal(g.vehicle, 'tank')
+})
+
+test('start() gives each player class its own hp, speed, turnSpeed, radius, damage, bulletSpeed, fireDelay and bulletRadius', () => {
+  const expected: Record<
+    PlayerVehicleKind,
+    {
+      hp: number
+      speed: number
+      turnSpeed: number
+      radius: number
+      damage: number
+      fireDelay: number
+      bulletSpeed: number
+      bulletRadius: number
+    }
+  > = {
+    buggy: { hp: 90, speed: 15, turnSpeed: 2.8, radius: 1.1, damage: 9, fireDelay: 0.14, bulletSpeed: 60, bulletRadius: 0.22 },
+    tank: { hp: 160, speed: 10.5, turnSpeed: 2.0, radius: 1.45, damage: 16, fireDelay: 0.22, bulletSpeed: 45, bulletRadius: 0.32 },
+    heavy: { hp: 240, speed: 7.0, turnSpeed: 1.5, radius: 1.9, damage: 26, fireDelay: 0.35, bulletSpeed: 32, bulletRadius: 0.45 },
+  }
+
+  const spawnDists: Record<PlayerVehicleKind, number> = { buggy: 0, tank: 0, heavy: 0 }
+
+  for (const kind of ['buggy', 'tank', 'heavy'] as const) {
+    const spec = expected[kind]
+    const stats = PLAYER_VEHICLES[kind]
+    assert.deepEqual(stats, spec, `PLAYER_VEHICLES.${kind} should match spec`)
+
+    const g = createGame([])
+    start(g, kind)
+    g.enemies.length = 0
+    g.toSpawn = 0
+
+    assert.equal(g.player.hp, spec.hp)
+    assert.equal(g.player.maxHp, spec.hp)
+
+    // Verify movement speed & turn speed.
+    const dt = 1 / 60
+    const events: FxEvent[] = []
+    update(g, dt, { ...idle, forward: true, left: true, firing: true }, events)
+    assert.ok(Math.abs(g.player.yaw - spec.turnSpeed * dt) < 1e-6, `${kind} yaw`)
+    assert.ok(Math.abs(Math.hypot(g.player.x, g.player.z) - spec.speed * dt) < 1e-6, `${kind} speed`)
+
+    // Verify bullet stats and fireDelay.
+    assert.equal(g.bullets.length, 1, `${kind} should fire 1 bullet`)
+    const b = g.bullets[0]
+    assert.equal(b.damage, spec.damage, `${kind} damage`)
+    assert.equal(b.radius, spec.bulletRadius, `${kind} bulletRadius`)
+    assert.ok(Math.abs(Math.hypot(b.vx, b.vz) - spec.bulletSpeed) < 1e-6, `${kind} bulletSpeed`)
+    assert.ok(Math.abs(g.player.cooldown - spec.fireDelay) < 1e-6, `${kind} fireDelay`)
+
+    const shot = events.find((e) => e.kind === 'shot' && !e.hostile)
+    assert.ok(shot && shot.kind === 'shot')
+    spawnDists[kind] = Math.hypot(shot.x - g.player.x, shot.z - g.player.z)
+
+    // Cannot fire again before fireDelay elapses; fires once fireDelay has passed.
+    g.bullets.length = 0
+    update(g, spec.fireDelay * 0.5, { ...idle, firing: true })
+    assert.equal(g.bullets.length, 0, `${kind} must respect fireDelay before firing again`)
+    update(g, spec.fireDelay * 0.6, { ...idle, firing: true })
+    assert.equal(g.bullets.length, 1, `${kind} should fire once fireDelay has elapsed`)
+
+    // Arena wall clamp reflects class hull radius.
+    const wallGame = createGame([])
+    start(wallGame, kind)
+    wallGame.enemies.length = 0
+    wallGame.toSpawn = 0
+    for (let i = 0; i < 600; i++) update(wallGame, dt, { ...idle, forward: true })
+    assert.ok(Math.abs(wallGame.player.z - -(ARENA.half - spec.radius)) < 1e-6, `${kind} wall clamp radius`)
+  }
+
+  assert.ok(spawnDists.tank > spawnDists.buggy, 'tank spawn offset should exceed buggy')
+  assert.ok(spawnDists.heavy > spawnDists.tank, 'heavy spawn offset should exceed tank')
+})
+
+test('player Bullet.radius equals class bulletRadius and collision uses b.radius (buggy grazes past, heavy hits)', () => {
+  // Scout enemy at x=1.25 has radius 0.9:
+  // - buggy bulletRadius 0.22 -> 0.9 + 0.22 = 1.12 < 1.25 (grazes past)
+  // - heavy bulletRadius 0.45 -> 0.9 + 0.45 = 1.35 >= 1.25 (hits)
+  const buggyGame = createGame([])
+  start(buggyGame, 'buggy')
+  buggyGame.enemies.length = 0
+  buggyGame.toSpawn = 0
+  buggyGame.enemies.push({ id: 10, kind: 'scout', x: 1.25, z: -6, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+
+  update(buggyGame, 1 / 60, { ...idle, firing: true })
+  assert.equal(buggyGame.bullets[0].radius, PLAYER_VEHICLES.buggy.bulletRadius)
+  for (let i = 0; i < 15; i++) update(buggyGame, 1 / 60, idle)
+  assert.equal(buggyGame.enemies[0].hp, 30, 'buggy bullet should graze past scout')
+  assert.equal(buggyGame.bullets.length, 1, 'buggy bullet should still be flying past scout')
+  assert.ok(buggyGame.bullets[0].z < -6, 'buggy bullet should have passed scout z')
+
+  const heavyGame = createGame([])
+  start(heavyGame, 'heavy')
+  heavyGame.enemies.length = 0
+  heavyGame.toSpawn = 0
+  heavyGame.enemies.push({ id: 11, kind: 'scout', x: 1.25, z: -6, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+
+  update(heavyGame, 1 / 60, { ...idle, firing: true })
+  assert.equal(heavyGame.bullets[0].radius, PLAYER_VEHICLES.heavy.bulletRadius)
+  for (let i = 0; i < 15; i++) update(heavyGame, 1 / 60, idle)
+  assert.equal(heavyGame.enemies[0].hp, 30 - PLAYER_VEHICLES.heavy.damage, 'heavy bullet should hit scout via b.radius')
+  assert.equal(heavyGame.bullets.length, 0, 'heavy bullet should be consumed on hit')
+
+  // Hostile bullet collision also respects b.radius against player hull radius (1.1).
+  const hostileCheck = createGame([])
+  start(hostileCheck, 'buggy')
+  hostileCheck.enemies.length = 0
+  hostileCheck.toSpawn = 0
+  hostileCheck.bullets.push({ x: 1.45, z: 0, vx: 0, vz: 0, life: 1, damage: 10, radius: 0.2, hostile: true })
+  update(hostileCheck, 1 / 60, idle)
+  assert.equal(hostileCheck.player.hp, PLAYER_VEHICLES.buggy.hp, 'small hostile bullet should miss')
+
+  hostileCheck.bullets.push({ x: 1.45, z: 0, vx: 0, vz: 0, life: 1, damage: 10, radius: 0.45, hostile: true })
+  update(hostileCheck, 1 / 60, idle)
+  assert.equal(hostileCheck.player.hp, PLAYER_VEHICLES.buggy.hp - 10, 'large hostile bullet should hit via b.radius')
+})
+
+test('ENEMIES.boss still spawns on wave 3 and enemy bullets carry radius', () => {
+  const g = createGame([])
+  start(g, 'heavy')
+  // Clear wave 1 and wave 2 to reach wave 3.
+  for (let w = 1; w <= 2; w++) {
+    g.enemies.length = 0
+    g.toSpawn = 0
+    g.breakTimer = 0
+    update(g, 1 / 60, idle)
+  }
+  assert.equal(g.wave, 3)
+  const boss = g.enemies.find((e) => e.kind === 'boss')
+  assert.ok(boss, 'wave 3 must spawn boss')
+  assert.equal(boss.hp, ENEMIES.boss.hp)
+
+  boss.cooldown = 0
+  update(g, 1 / 60, idle)
+  const bossBullet = g.bullets.find((b) => b.hostile)
+  assert.ok(bossBullet, 'boss should fire a hostile bullet')
+  assert.equal(bossBullet.radius, ENEMIES.boss.bulletRadius)
+  assert.equal(bossBullet.damage, ENEMIES.boss.damage)
 })
