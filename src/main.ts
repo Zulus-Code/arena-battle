@@ -36,6 +36,11 @@ interface EnemyVisual {
   recoil: number
 }
 
+function dampApproach(cur: number, target: number, rate: number, dt: number): number {
+  const next = cur + (target - cur) * Math.min(1, dt * rate)
+  return Math.abs(target - next) < 1e-4 ? target : next
+}
+
 function lerpAngle(a: number, b: number, t: number): number {
   let d = (b - a) % (Math.PI * 2)
   if (d > Math.PI) d -= Math.PI * 2
@@ -152,6 +157,7 @@ function applyQuality(preset: QualityPreset): void {
   sun.castShadow = shadowsEnabled
   fx.setParticleScale(spec.particleScale)
   hud.setQuality(preset)
+  renderDirty = true
   try {
     localStorage.setItem('arena-quality', preset)
   } catch {
@@ -160,6 +166,9 @@ function applyQuality(preset: QualityPreset): void {
 }
 
 let lastPausedAt = 0
+let renderDirty = true
+const lastCamPos = new THREE.Vector3(Infinity, Infinity, Infinity)
+const lastCamQuat = new THREE.Quaternion(NaN, NaN, NaN, NaN)
 
 function pauseGame(): void {
   if (game.phase !== 'playing') return
@@ -168,6 +177,7 @@ function pauseGame(): void {
   input.clear()
   acc = 0
   snapshotPrev()
+  renderDirty = true
 }
 
 function resumeGame(): void {
@@ -180,6 +190,7 @@ function resumeGame(): void {
   prevPx = game.player.x
   prevPz = game.player.z
   prevRenderYaw = game.player.yaw
+  renderDirty = true
 }
 
 function restartGame(): void {
@@ -188,6 +199,7 @@ function restartGame(): void {
   input.clear()
   acc = 0
   last = performance.now()
+  renderDirty = true
 }
 
 function goToMenu(): void {
@@ -196,6 +208,7 @@ function goToMenu(): void {
   input.clear()
   acc = 0
   last = performance.now()
+  renderDirty = true
 }
 
 const hud = createHud(ui, {
@@ -310,6 +323,7 @@ function selectPlayerVehicle(kind: PlayerVehicleKind): void {
   aimDot.position.set(0, turret.muzzleY, turret.muzzleZ - 10)
   turret.root.add(aimBeam, aimDot)
   scene.add(player.root)
+  renderDirty = true
 }
 
 const ENEMY_MODEL: Record<EnemyKind, VehicleKind> = {
@@ -424,7 +438,7 @@ function syncPlayerVisuals(dt: number, alpha: number): void {
   }
 
   const targetSteer = (input.state.left ? 0.38 : 0) + (input.state.right ? -0.38 : 0)
-  playerSteer += (targetSteer - playerSteer) * Math.min(1, dt * 14)
+  playerSteer = dampApproach(playerSteer, targetSteer, 14, dt)
   for (const sp of player.steerPivots) sp.rotation.y = playerSteer
 
   // Suspension pitch (throttle/brake) and body roll (turning speed).
@@ -433,8 +447,8 @@ function syncPlayerVisuals(dt: number, alpha: number): void {
   prevRenderYaw = ryaw
   const targetPitch = game.phase === 'playing' ? driveInput * 0.045 : 0
   const targetRoll = Math.max(-0.08, Math.min(0.08, -yawRate * 0.022))
-  playerPitch += (targetPitch - playerPitch) * Math.min(1, dt * 10)
-  playerRoll += (targetRoll - playerRoll) * Math.min(1, dt * 10)
+  playerPitch = dampApproach(playerPitch, targetPitch, 10, dt)
+  playerRoll = dampApproach(playerRoll, targetRoll, 10, dt)
   player.tiltGroup.rotation.x = playerPitch
   player.tiltGroup.rotation.z = playerRoll
 
@@ -548,6 +562,9 @@ function syncCamera(dt: number, alpha: number): void {
   camTarget.set(rx + fxDir * 2.0 * camScale, 1.0, rz + fzDir * 2.0 * camScale)
   const k = 1 - Math.pow(0.00005, dt)
   camera.position.lerp(camFollow, k)
+  if (!(dt > 0 && game.shake > 0) && camera.position.distanceToSquared(camFollow) < 1e-6) {
+    camera.position.copy(camFollow)
+  }
   camera.lookAt(camTarget)
   if (dt > 0 && game.shake > 0) {
     camera.position.x += (Math.random() - 0.5) * game.shake * 1.5
@@ -559,6 +576,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight
   camera.updateProjectionMatrix()
   renderer.setSize(window.innerWidth, window.innerHeight)
+  renderDirty = true
 })
 
 document.addEventListener('pointerlockchange', () => {
@@ -623,6 +641,17 @@ function snapshotPrev(): void {
   }
 }
 
+function renderSceneIfNeeded(force: boolean): void {
+  const camMoved =
+    camera.position.distanceToSquared(lastCamPos) > 1e-10 ||
+    Math.abs(camera.quaternion.dot(lastCamQuat)) < 1 - 1e-9
+  if (!force && !renderDirty && !camMoved) return
+  renderer.render(scene, camera)
+  lastCamPos.copy(camera.position)
+  lastCamQuat.copy(camera.quaternion)
+  renderDirty = false
+}
+
 function tickFrame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.1)
   last = now
@@ -631,34 +660,55 @@ function tickFrame(now: number): void {
   if (game.phase === 'paused') {
     acc = 0
     input.endFrame()
-  } else {
-    acc += dt
-    if (acc > STEP * 5) acc = STEP * 5
-
-    input.beginFrame()
-    while (acc >= STEP) {
-      snapshotPrev()
-      update(game, STEP, input.state, frameEvents)
-      // mouse delta belongs to the frame, not to every fixed step
-      input.state.yawDelta = 0
-      acc -= STEP
-    }
-    input.endFrame()
+    const hudChanged = hud.update(game)
+    if (!renderDirty && !hudChanged) return
+    syncPlayerVisuals(0, 1)
+    syncEnemies(0, 1)
+    bullets.sync(game.bullets, camera, true)
+    syncCamera(0, 1)
+    renderSceneIfNeeded(true)
+    return
   }
 
-  const paused = game.phase === 'paused'
-  const simDt = paused ? 0 : dt
+  acc += dt
+  if (acc > STEP * 5) acc = STEP * 5
+
+  input.beginFrame()
+  while (acc >= STEP) {
+    snapshotPrev()
+    update(game, STEP, input.state, frameEvents)
+    // mouse delta belongs to the frame, not to every fixed step
+    input.state.yawDelta = 0
+    acc -= STEP
+  }
+  input.endFrame()
+
+  if (game.phase === 'menu') {
+    syncPlayerVisuals(dt, 1)
+    syncEnemies(dt, 1)
+    if (fx.isActive()) fx.update(dt)
+    if (game.bullets.length > 0 || renderDirty) bullets.sync(game.bullets, camera, false)
+    syncCamera(dt, 1)
+    const hudChanged = hud.update(game)
+    const menuAnimating =
+      fx.isActive() ||
+      turretRecoil > 0 ||
+      Math.abs(playerSteer) > 0 ||
+      Math.abs(playerPitch) > 0 ||
+      Math.abs(playerRoll) > 0
+    renderSceneIfNeeded(hudChanged || menuAnimating)
+    return
+  }
+
   const alpha = game.phase === 'playing' ? acc / STEP : 1
-  syncPlayerVisuals(simDt, alpha)
-  syncEnemies(simDt, alpha)
-  if (!paused) {
-    handleEvents(frameEvents)
-    fx.update(dt)
-  }
-  bullets.sync(game.bullets, camera, paused)
-  syncCamera(simDt, alpha)
+  syncPlayerVisuals(dt, alpha)
+  syncEnemies(dt, alpha)
+  handleEvents(frameEvents)
+  fx.update(dt)
+  bullets.sync(game.bullets, camera, false)
+  syncCamera(dt, alpha)
   hud.update(game)
-  renderer.render(scene, camera)
+  renderSceneIfNeeded(true)
 }
 
 if (perfOverlay) {

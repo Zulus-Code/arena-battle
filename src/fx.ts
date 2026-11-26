@@ -46,6 +46,7 @@ export interface FxSystem {
   spawnExplosion(x: number, z: number, kind: EnemyKind): void
   spawnDust(x: number, z: number, vx: number, vz: number, scale?: number): void
   setParticleScale(scale: number): void
+  isActive(): boolean
   update(dt: number): void
   reset(): void
 }
@@ -463,6 +464,17 @@ export function createFxSystem(scene: THREE.Scene): FxSystem {
 
     setParticleScale(scale) {
       particleScale = Math.max(0.25, Math.min(1, scale))
+    },
+
+    isActive() {
+      return (
+        sparksRing.active ||
+        sparksRing.prevCount > 0 ||
+        smokeRing.active ||
+        smokeRing.prevCount > 0 ||
+        ringsActive ||
+        prevRings > 0
+      )
     },
 
     update(dt) {

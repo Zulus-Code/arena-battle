@@ -19,10 +19,85 @@ const ENEMY_MAP_RADIUS: Record<EnemyKind, number> = {
 }
 
 export interface Hud {
-  update(game: Game): void
+  update(game: Game): boolean
   triggerHit(): void
   setQuality(preset: QualityPreset): void
   setVehicle(kind: PlayerVehicleKind): void
+}
+
+export interface MinimapEnemySnap {
+  id: number
+  x: number
+  z: number
+  kind: EnemyKind
+}
+
+export interface MinimapSnapshot {
+  phase: string
+  obstaclesLen: number
+  px: number
+  pz: number
+  pyaw: number
+  enemies: MinimapEnemySnap[]
+}
+
+export function createMinimapSnapshot(): MinimapSnapshot {
+  return {
+    phase: '',
+    obstaclesLen: -1,
+    px: NaN,
+    pz: NaN,
+    pyaw: NaN,
+    enemies: [],
+  }
+}
+
+/**
+ * Returns true and updates `snap` in place whenever anything rendered on the 2D minimap changed.
+ * Keeps zero per-frame allocations once enemy capacity stabilizes.
+ */
+export function syncMinimapSnapshot(snap: MinimapSnapshot, game: Game, force: boolean): boolean {
+  let dirty =
+    force ||
+    game.phase !== snap.phase ||
+    game.obstacles.length !== snap.obstaclesLen ||
+    game.player.x !== snap.px ||
+    game.player.z !== snap.pz ||
+    game.player.yaw !== snap.pyaw ||
+    game.enemies.length !== snap.enemies.length
+
+  if (!dirty) {
+    for (let i = 0; i < game.enemies.length; i++) {
+      const e = game.enemies[i]
+      const prev = snap.enemies[i]
+      if (e.id !== prev.id || e.x !== prev.x || e.z !== prev.z || e.kind !== prev.kind) {
+        dirty = true
+        break
+      }
+    }
+  }
+
+  if (!dirty) return false
+
+  snap.phase = game.phase
+  snap.obstaclesLen = game.obstacles.length
+  snap.px = game.player.x
+  snap.pz = game.player.z
+  snap.pyaw = game.player.yaw
+  snap.enemies.length = game.enemies.length
+  for (let i = 0; i < game.enemies.length; i++) {
+    const e = game.enemies[i]
+    const slot = snap.enemies[i]
+    if (slot) {
+      slot.id = e.id
+      slot.x = e.x
+      slot.z = e.z
+      slot.kind = e.kind
+    } else {
+      snap.enemies[i] = { id: e.id, x: e.x, z: e.z, kind: e.kind }
+    }
+  }
+  return true
 }
 
 export interface HudCallbacks {
@@ -99,13 +174,14 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
   const mapPt = { mx: 0, my: 0 }
   let mapDpr = 0
 
-  const syncMapDpr = () => {
+  const syncMapDpr = (): boolean => {
     const dpr = Math.max(1, window.devicePixelRatio || 1)
-    if (dpr === mapDpr) return
+    if (dpr === mapDpr) return false
     mapDpr = dpr
     minimap.width = Math.round(MAP_SIZE * dpr)
     minimap.height = Math.round(MAP_SIZE * dpr)
     mapCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
+    return true
   }
   syncMapDpr()
 
@@ -128,23 +204,28 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
   let lastWave = -1
   let lastPhase = ''
   let flashTimer = 0
+  const mapSnap = createMinimapSnapshot()
 
   return {
     update(game) {
+      let changed = false
       const maxHp = game.player.maxHp > 0 ? game.player.maxHp : 100
       const hpPct = Math.max(0, Math.min(100, (game.player.hp / maxHp) * 100))
       if (hpPct !== lastHp) {
         lastHp = hpPct
         hp.style.width = `${hpPct}%`
         hp.classList.toggle('low', hpPct <= 30)
+        changed = true
       }
       if (game.score !== lastScore) {
         lastScore = game.score
         score.textContent = `Счёт: ${game.score}`
+        changed = true
       }
       if (game.wave !== lastWave) {
         lastWave = game.wave
         wave.textContent = `Волна: ${Math.max(1, game.wave)}`
+        changed = true
       }
       if (game.phase !== lastPhase) {
         lastPhase = game.phase
@@ -154,9 +235,13 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
         if (game.phase === 'over') {
           final.textContent = `Счёт: ${game.score} · волн пройдено: ${Math.max(0, game.wave - 1)}`
         }
+        changed = true
       }
 
-      syncMapDpr()
+      const dprChanged = syncMapDpr()
+      if (!syncMinimapSnapshot(mapSnap, game, dprChanged)) return changed
+      changed = true
+
       const scale = MAP_SIZE / (ARENA.half * 2)
 
       // 1. Arena background & frame.
@@ -204,6 +289,7 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
         mapCtx.arc(mapPt.mx, mapPt.my, ENEMY_MAP_RADIUS[e.kind], 0, Math.PI * 2)
         mapCtx.fill()
       }
+      return true
     },
     triggerHit() {
       flash.classList.add('active')
