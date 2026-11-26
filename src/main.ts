@@ -122,14 +122,19 @@ if (perf) renderer.info.autoReset = false
 await renderer.init()
 
 const scene = new THREE.Scene()
-if (perf?.ibl === '0') {
-  scene.environment = null
+const iblAllowed = perf?.ibl !== '0'
+const detailMapsAllowed = perf?.bump !== '0'
+let envTexture: THREE.Texture | null = null
+if (iblAllowed && QUALITY_PRESETS[quality].ibl) {
+  envTexture = buildStaticEnvironment(renderer, scene)
 } else {
-  buildStaticEnvironment(renderer, scene)
+  scene.environment = null
 }
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 280)
 
-const { obstacles, sun } = buildArena(scene, perf?.bump === '0' ? { bump: false } : undefined)
+const { obstacles, sun, setDetailMaps } = buildArena(scene, {
+  bump: detailMapsAllowed && QUALITY_PRESETS[quality].detailMaps,
+})
 let selectedVehicle: PlayerVehicleKind = 'buggy'
 try {
   const savedVehicle = localStorage.getItem('arena-vehicle')
@@ -144,7 +149,7 @@ const input = createInput(canvas)
 const fx = createFxSystem(scene)
 const bullets = createBulletSystem(scene)
 
-// Live preset switching updates only renderScale, shadows, and particles;
+// Live preset switching updates renderScale, shadows, particles, detailMaps, and IBL;
 // samples/antialias changes are saved to localStorage and take effect on next load.
 function applyQuality(preset: QualityPreset): void {
   quality = preset
@@ -155,6 +160,13 @@ function applyQuality(preset: QualityPreset): void {
   renderer.setPixelRatio(pixelRatio)
   renderer.shadowMap.enabled = shadowsEnabled
   sun.castShadow = shadowsEnabled
+  setDetailMaps(detailMapsAllowed && spec.detailMaps)
+  if (!iblAllowed || !spec.ibl) {
+    scene.environment = null
+  } else {
+    envTexture ??= buildStaticEnvironment(renderer, scene)
+    scene.environment = envTexture
+  }
   fx.setParticleScale(spec.particleScale)
   hud.setQuality(preset)
   renderDirty = true

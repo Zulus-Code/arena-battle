@@ -6,12 +6,14 @@ export interface QualitySpec {
   samples: number
   shadows: boolean
   particleScale: number
+  detailMaps: boolean
+  ibl: boolean
 }
 
 export const QUALITY_PRESETS: Record<QualityPreset, QualitySpec> = {
-  high: { renderScale: 1.0, samples: 2, shadows: true, particleScale: 1.0 },
-  balanced: { renderScale: 0.85, samples: 0, shadows: true, particleScale: 0.75 },
-  low: { renderScale: 0.7, samples: 0, shadows: false, particleScale: 0.5 },
+  high: { renderScale: 1.0, samples: 2, shadows: true, particleScale: 1.0, detailMaps: true, ibl: true },
+  balanced: { renderScale: 0.85, samples: 0, shadows: true, particleScale: 0.75, detailMaps: true, ibl: true },
+  low: { renderScale: 0.7, samples: 0, shadows: false, particleScale: 0.5, detailMaps: false, ibl: false },
 }
 
 export const QUALITY_ORDER: readonly QualityPreset[] = ['high', 'balanced', 'low']

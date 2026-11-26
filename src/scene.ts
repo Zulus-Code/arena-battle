@@ -7,6 +7,7 @@ import { mulberry32, type Rect } from './rules.ts'
 export interface ArenaBuild {
   obstacles: Rect[]
   sun: THREE.DirectionalLight
+  setDetailMaps(enabled: boolean): void
 }
 
 export interface ArenaOptions {
@@ -386,7 +387,7 @@ function makeSurfaceMaterial(
 
 /** Builds the batched arena, procedural PBR maps, sky, fog, lighting, and shadow rig. */
 export function buildArena(scene: THREE.Scene, options?: ArenaOptions): ArenaBuild {
-  const withDetailMaps = options?.bump !== false
+  let detailEnabled = options?.bump !== false
   const half = ARENA.half
   const wallT = ARENA.wallThickness
   const wallH = ARENA.wallHeight
@@ -397,10 +398,12 @@ export function buildArena(scene: THREE.Scene, options?: ArenaOptions): ArenaBui
   scene.add(buildOuterTerrain(half))
 
   // Arena floor
-  const floorMaps = arenaFloorMaps(withDetailMaps)
+  const floorMaps = arenaFloorMaps(detailEnabled)
+  let floorDetailMat = detailEnabled ? makeSurfaceMaterial(floorMaps, 0.03, 0.9, 0.02) : null
+  let floorPlainMat = detailEnabled ? null : makeSurfaceMaterial({ map: floorMaps.map }, 0.03, 0.9, 0.02)
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(half * 2, half * 2),
-    makeSurfaceMaterial(floorMaps, 0.03, 0.9, 0.02),
+    (detailEnabled ? floorDetailMat : floorPlainMat)!,
   )
   floor.rotation.x = -Math.PI / 2
   floor.receiveShadow = true
@@ -432,7 +435,7 @@ export function buildArena(scene: THREE.Scene, options?: ArenaOptions): ArenaBui
   scene.add(markings)
 
   // Walls (4 merged into 1 mesh) + caps/pillars (merged into 1 vertex-colored mesh).
-  const wMaps = wallMaps(withDetailMaps)
+  const wMaps = wallMaps(detailEnabled)
   const wallGeos: THREE.BufferGeometry[] = []
   const trimGeos: THREE.BufferGeometry[] = []
   const span = half * 2 + wallT * 2
@@ -466,9 +469,11 @@ export function buildArena(scene: THREE.Scene, options?: ArenaOptions): ArenaBui
     }
   }
 
+  let wallDetailMat = detailEnabled ? makeSurfaceMaterial(wMaps, 0.035, 0.78, 0.18) : null
+  let wallPlainMat = detailEnabled ? null : makeSurfaceMaterial({ map: wMaps.map }, 0.035, 0.78, 0.18)
   const wallMesh = new THREE.Mesh(
     mergeGroup(wallGeos),
-    makeSurfaceMaterial(wMaps, 0.035, 0.78, 0.18),
+    (detailEnabled ? wallDetailMat : wallPlainMat)!,
   )
   wallMesh.castShadow = true
   wallMesh.receiveShadow = true
@@ -579,5 +584,37 @@ export function buildArena(scene: THREE.Scene, options?: ArenaOptions): ArenaBui
   fill.position.set(-16, 14, -20)
   scene.add(fill)
 
-  return { obstacles: rects, sun }
+  function setDetailMaps(enabled: boolean): void {
+    if (enabled === detailEnabled) return
+    detailEnabled = enabled
+    if (enabled) {
+      if (!floorDetailMat) {
+        if (!floorMaps.roughnessMap || !floorMaps.bumpMap) {
+          const extra = arenaFloorMaps(true)
+          extra.map.dispose()
+          floorMaps.roughnessMap = extra.roughnessMap
+          floorMaps.bumpMap = extra.bumpMap
+        }
+        floorDetailMat = makeSurfaceMaterial(floorMaps, 0.03, 0.9, 0.02)
+      }
+      if (!wallDetailMat) {
+        if (!wMaps.roughnessMap || !wMaps.bumpMap) {
+          const extra = wallMaps(true)
+          extra.map.dispose()
+          wMaps.roughnessMap = extra.roughnessMap
+          wMaps.bumpMap = extra.bumpMap
+        }
+        wallDetailMat = makeSurfaceMaterial(wMaps, 0.035, 0.78, 0.18)
+      }
+      floor.material = floorDetailMat
+      wallMesh.material = wallDetailMat
+    } else {
+      floorPlainMat ??= makeSurfaceMaterial({ map: floorMaps.map }, 0.03, 0.9, 0.02)
+      wallPlainMat ??= makeSurfaceMaterial({ map: wMaps.map }, 0.035, 0.78, 0.18)
+      floor.material = floorPlainMat
+      wallMesh.material = wallPlainMat
+    }
+  }
+
+  return { obstacles: rects, sun, setDetailMaps }
 }

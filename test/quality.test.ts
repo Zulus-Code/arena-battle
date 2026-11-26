@@ -17,8 +17,29 @@ test('nextQualityPreset cycles high -> balanced -> low -> high', () => {
   assert.equal(nextQualityPreset('low'), 'high')
 })
 
-test('QUALITY_PRESETS matches target renderScale, samples, and shadows', () => {
-  assert.deepEqual(QUALITY_PRESETS.high, { renderScale: 1.0, samples: 2, shadows: true, particleScale: 1.0 })
-  assert.deepEqual(QUALITY_PRESETS.balanced, { renderScale: 0.85, samples: 0, shadows: true, particleScale: 0.75 })
-  assert.deepEqual(QUALITY_PRESETS.low, { renderScale: 0.7, samples: 0, shadows: false, particleScale: 0.5 })
+test('QUALITY_PRESETS matches target renderScale, samples, shadows, detailMaps and ibl', () => {
+  assert.deepEqual(QUALITY_PRESETS.high, {
+    renderScale: 1.0,
+    samples: 2,
+    shadows: true,
+    particleScale: 1.0,
+    detailMaps: true,
+    ibl: true,
+  })
+  assert.deepEqual(QUALITY_PRESETS.balanced, {
+    renderScale: 0.85,
+    samples: 0,
+    shadows: true,
+    particleScale: 0.75,
+    detailMaps: true,
+    ibl: true,
+  })
+  assert.deepEqual(QUALITY_PRESETS.low, {
+    renderScale: 0.7,
+    samples: 0,
+    shadows: false,
+    particleScale: 0.5,
+    detailMaps: false,
+    ibl: false,
+  })
 })
