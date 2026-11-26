@@ -1,7 +1,8 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { ARENA, ENEMIES, PLAYER_VEHICLES, type PlayerVehicleKind } from '../src/config.ts'
-import { createGame, pause, resume, returnToMenu, setVehicle, start, update, type FxEvent, type Input } from '../src/game.ts'
+import { createGame, pause, resume, returnToMenu, setVehicle, spawnEnemy, start, update, type FxEvent, type Input } from '../src/game.ts'
+import { mulberry32, type Rect } from '../src/rules.ts'
 
 const idle: Input = { forward: false, back: false, left: false, right: false, firing: false, yawDelta: 0 }
 
@@ -10,7 +11,7 @@ test('player bullets kill an enemy standing straight ahead', () => {
   start(g)
   g.enemies.length = 0
   g.toSpawn = 0
-  g.enemies.push({ id: 99, kind: 'scout', x: 0, z: -8, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+  g.enemies.push({ id: 99, kind: 'scout', x: 0, z: -8, yaw: 0, hp: 30, cooldown: 99, engageTimer: 0, touch: 0 })
 
   for (let i = 0; i < 120; i++) update(g, 1 / 60, { ...idle, firing: true })
 
@@ -51,7 +52,7 @@ test('turret aims independently of the hull', () => {
   start(g)
   g.enemies.length = 0
   g.toSpawn = 0
-  g.enemies.push({ id: 7, kind: 'scout', x: 0, z: 8, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+  g.enemies.push({ id: 7, kind: 'scout', x: 0, z: 8, yaw: 0, hp: 30, cooldown: 99, engageTimer: 0, touch: 0 })
 
   // enemy sits behind the hull: only the turret is turned around and fires
   g.player.turret = Math.PI
@@ -78,7 +79,7 @@ test('bullets fire along the turret aim even when the hull faces sideways', () =
   g.toSpawn = 0
   g.player.yaw = Math.PI / 2 // hull faces -X
   g.player.turret = Math.PI / 2 // aim turret toward -X
-  g.enemies.push({ id: 5, kind: 'scout', x: -8, z: 0, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+  g.enemies.push({ id: 5, kind: 'scout', x: -8, z: 0, yaw: 0, hp: 30, cooldown: 99, engageTimer: 0, touch: 0 })
 
   for (let i = 0; i < 120; i++) update(g, 1 / 60, { ...idle, firing: true })
   assert.equal(g.enemies.some((e) => e.id === 5), false)
@@ -100,7 +101,7 @@ test('update emits shot, enemyHit, wallHit and playerHit events when buffer is p
   start(g)
   g.enemies.length = 0
   g.toSpawn = 0
-  g.enemies.push({ id: 42, kind: 'scout', x: 0, z: -4, yaw: 0, hp: 10, cooldown: 99, touch: 0 })
+  g.enemies.push({ id: 42, kind: 'scout', x: 0, z: -4, yaw: 0, hp: 10, cooldown: 99, engageTimer: 0, touch: 0 })
 
   const events: FxEvent[] = []
   for (let i = 0; i < 25; i++) update(g, 1 / 60, { ...idle, firing: true }, events)
@@ -321,7 +322,7 @@ test('player Bullet.radius equals class bulletRadius and collision uses b.radius
   start(buggyGame, 'buggy')
   buggyGame.enemies.length = 0
   buggyGame.toSpawn = 0
-  buggyGame.enemies.push({ id: 10, kind: 'scout', x: 1.25, z: -6, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+  buggyGame.enemies.push({ id: 10, kind: 'scout', x: 1.25, z: -6, yaw: 0, hp: 30, cooldown: 99, engageTimer: 0, touch: 0 })
 
   update(buggyGame, 1 / 60, { ...idle, firing: true })
   assert.equal(buggyGame.bullets[0].radius, PLAYER_VEHICLES.buggy.bulletRadius)
@@ -334,7 +335,7 @@ test('player Bullet.radius equals class bulletRadius and collision uses b.radius
   start(heavyGame, 'heavy')
   heavyGame.enemies.length = 0
   heavyGame.toSpawn = 0
-  heavyGame.enemies.push({ id: 11, kind: 'scout', x: 1.25, z: -6, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
+  heavyGame.enemies.push({ id: 11, kind: 'scout', x: 1.25, z: -6, yaw: 0, hp: 30, cooldown: 99, engageTimer: 0, touch: 0 })
 
   update(heavyGame, 1 / 60, { ...idle, firing: true })
   assert.equal(heavyGame.bullets[0].radius, PLAYER_VEHICLES.heavy.bulletRadius)
@@ -371,10 +372,140 @@ test('ENEMIES.boss still spawns on wave 3 and enemy bullets carry radius', () =>
   assert.ok(boss, 'wave 3 must spawn boss')
   assert.equal(boss.hp, ENEMIES.boss.hp)
 
+  boss.x = 0
+  boss.z = -14
   boss.cooldown = 0
-  update(g, 1 / 60, idle)
+  for (let i = 0; i <= Math.ceil(ENEMIES.boss.reaction * 60); i++) {
+    update(g, 1 / 60, idle)
+  }
   const bossBullet = g.bullets.find((b) => b.hostile)
   assert.ok(bossBullet, 'boss should fire a hostile bullet')
   assert.equal(bossBullet.radius, ENEMIES.boss.bulletRadius)
   assert.equal(bossBullet.damage, ENEMIES.boss.damage)
+})
+
+test('enemy outside detectRange neither moves toward player nor fires; inside (approachRange, detectRange] approaches', () => {
+  const g = createGame([])
+  start(g)
+  g.enemies.length = 0
+  g.toSpawn = 0
+
+  const farZ = -(ENEMIES.scout.detectRange + 2)
+  g.enemies.push({ id: 1, kind: 'scout', x: 0, z: farZ, yaw: 0, hp: 30, cooldown: 0, engageTimer: 10, touch: 0 })
+  for (let i = 0; i < 30; i++) update(g, 1 / 60, idle)
+  assert.equal(g.enemies[0].z, farZ, 'enemy beyond detectRange must not move toward player')
+  assert.equal(g.bullets.length, 0, 'enemy beyond detectRange must not fire')
+
+  // Move inside detectRange (16) and outside approachRange (9): enemy approaches player.
+  g.enemies[0].z = -14
+  update(g, 1 / 60, idle)
+  assert.ok(g.enemies[0].z > -14, 'enemy inside detectRange and beyond approachRange must move closer')
+})
+
+test('enemy in fireRange behind obstacle does not shoot, and shoots after obstacle is removed and reaction elapses', () => {
+  const obstacles: Rect[] = [{ x: 0, z: -5, hx: 2, hz: 1 }]
+  const g = createGame(obstacles)
+  start(g)
+  g.enemies.length = 0
+  g.toSpawn = 0
+  // Inside scout approachRange (9) & fireRange (12) so it stays behind the obstacle at z = -8.
+  g.enemies.push({ id: 2, kind: 'scout', x: 0, z: -8, yaw: 0, hp: 30, cooldown: 0, engageTimer: 0, touch: 0 })
+
+  for (let i = 0; i < 90; i++) update(g, 1 / 60, idle)
+  assert.equal(g.bullets.length, 0, 'enemy must not shoot through an obstacle')
+  assert.equal(g.enemies[0].engageTimer, 0, 'engageTimer must remain 0 while LOS is blocked')
+
+  obstacles.length = 0
+  for (let i = 0; i <= Math.ceil(ENEMIES.scout.reaction * 60); i++) {
+    update(g, 1 / 60, idle)
+  }
+  assert.equal(g.bullets.length, 1, 'enemy should shoot once obstacle is removed and reaction elapses')
+})
+
+test('enemy does not fire before reaction seconds after target becomes visible, and resets timer on LOS loss', () => {
+  const obstacles: Rect[] = []
+  const g = createGame(obstacles)
+  start(g)
+  g.enemies.length = 0
+  g.toSpawn = 0
+  g.enemies.push({ id: 3, kind: 'tank', x: 0, z: -10, yaw: 0, hp: 90, cooldown: 0, engageTimer: 0, touch: 0 })
+
+  // Step slightly less than tank reaction (0.70s): 40 frames = 0.667s.
+  for (let i = 0; i < 40; i++) update(g, 1 / 60, idle)
+  assert.equal(g.bullets.length, 0, 'enemy must not fire before reaction seconds')
+
+  // Break LOS briefly -> engageTimer resets to 0.
+  obstacles.push({ x: 0, z: -5, hx: 2, hz: 1 })
+  update(g, 1 / 60, idle)
+  assert.equal(g.enemies[0].engageTimer, 0, 'losing LOS must reset engageTimer')
+
+  // Clear LOS again: must wait full reaction (0.70s) again before firing.
+  obstacles.length = 0
+  for (let i = 0; i < 40; i++) update(g, 1 / 60, idle)
+  assert.equal(g.bullets.length, 0, 'must wait full reaction time after regaining LOS')
+
+  for (let i = 0; i < 5; i++) update(g, 1 / 60, idle)
+  assert.equal(g.bullets.length, 1, 'enemy should fire once reaction elapses')
+})
+
+test('spawnEnemy never spawns closer than 16 units across 100 seeds and sets initial cooldown to 2s', () => {
+  const playerSpots = [
+    { x: 0, z: 0 },
+    { x: 18, z: 18 },
+    { x: -19, z: 17 },
+    { x: 19, z: -18 },
+    { x: -10, z: -15 },
+  ]
+  for (let i = 0; i < 100; i++) {
+    const g = createGame([])
+    start(g)
+    g.enemies.length = 0
+    g.rng = mulberry32(i + 1)
+    const spot = playerSpots[i % playerSpots.length]
+    g.player.x = spot.x
+    g.player.z = spot.z
+    spawnEnemy(g, i % 3 === 0 ? 'tank' : 'scout')
+    const e = g.enemies[0]
+    const dist = Math.hypot(e.x - g.player.x, e.z - g.player.z)
+    assert.ok(dist >= 16, `run ${i}: spawned enemy too close (${dist.toFixed(2)} < 16)`)
+    assert.equal(e.cooldown, 2, 'freshly spawned enemy must have 2s initial cooldown')
+    assert.equal(e.engageTimer, 0)
+  }
+})
+
+test('at most 2 enemies fire in a single tick while remaining enemies wait for the next tick', () => {
+  const g = createGame([])
+  start(g)
+  g.enemies.length = 0
+  g.toSpawn = 0
+
+  for (let i = 0; i < 5; i++) {
+    g.enemies.push({
+      id: 100 + i,
+      kind: 'scout',
+      x: (i - 2) * 2,
+      z: -8,
+      yaw: 0,
+      hp: 30,
+      cooldown: 0,
+      engageTimer: ENEMIES.scout.reaction,
+      touch: 0,
+    })
+  }
+
+  const events: FxEvent[] = []
+  update(g, 1 / 60, idle, events)
+  const tick1Shots = events.filter((e) => e.kind === 'shot' && e.hostile)
+  assert.equal(tick1Shots.length, 2, 'at most 2 enemies may fire in tick 1')
+  assert.equal(g.bullets.length, 2)
+
+  events.length = 0
+  update(g, 1 / 60, idle, events)
+  const tick2Shots = events.filter((e) => e.kind === 'shot' && e.hostile)
+  assert.equal(tick2Shots.length, 2, 'next 2 enemies fire in tick 2')
+
+  events.length = 0
+  update(g, 1 / 60, idle, events)
+  const tick3Shots = events.filter((e) => e.kind === 'shot' && e.hostile)
+  assert.equal(tick3Shots.length, 1, 'remaining 5th enemy fires in tick 3')
 })

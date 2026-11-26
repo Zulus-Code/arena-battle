@@ -7,7 +7,11 @@ import {
   type EnemyKind,
   type PlayerVehicleKind,
 } from './config.ts'
-import { circlesHit, moveCircle, mulberry32, type Rect } from './rules.ts'
+import { circlesHit, clamp, moveCircle, mulberry32, raycastArena, type Rect } from './rules.ts'
+
+const MIN_SPAWN_DISTANCE = 16
+const MAX_SIMULTANEOUS_FIRE = 2
+const SPAWN_ATTEMPTS = 12
 
 export interface Bullet {
   x: number
@@ -28,6 +32,7 @@ export interface Enemy {
   yaw: number
   hp: number
   cooldown: number
+  engageTimer: number
   touch: number
 }
 
@@ -156,12 +161,36 @@ function pickKind(game: Game): EnemyKind {
   return game.rng() < 0.35 ? 'tank' : 'scout'
 }
 
-function spawnEnemy(game: Game, kind: EnemyKind): void {
+export function spawnEnemy(game: Game, kind: EnemyKind): void {
   const limit = ARENA.half - 3
-  const t = (game.rng() * 2 - 1) * limit
-  const side = Math.floor(game.rng() * 4)
-  const x = side === 0 ? t : side === 1 ? t : side === 2 ? -limit : limit
-  const z = side === 0 ? -limit : side === 1 ? limit : side === 2 ? t : t
+  const p = game.player
+  let x = 0
+  let z = 0
+  let found = false
+
+  for (let attempt = 0; attempt < SPAWN_ATTEMPTS; attempt++) {
+    const t = (game.rng() * 2 - 1) * limit
+    const side = Math.floor(game.rng() * 4)
+    const cx = side === 0 ? t : side === 1 ? t : side === 2 ? -limit : limit
+    const cz = side === 0 ? -limit : side === 1 ? limit : side === 2 ? t : t
+    if (Math.hypot(cx - p.x, cz - p.z) >= MIN_SPAWN_DISTANCE) {
+      x = cx
+      z = cz
+      found = true
+      break
+    }
+  }
+
+  if (!found) {
+    if (Math.abs(p.x) >= Math.abs(p.z)) {
+      x = p.x >= 0 ? -limit : limit
+      z = clamp(-p.z, -limit, limit)
+    } else {
+      x = clamp(-p.x, -limit, limit)
+      z = p.z >= 0 ? -limit : limit
+    }
+  }
+
   game.enemies.push({
     id: game.nextId++,
     kind,
@@ -169,7 +198,8 @@ function spawnEnemy(game: Game, kind: EnemyKind): void {
     z,
     yaw: 0,
     hp: ENEMIES[kind].hp,
-    cooldown: 1,
+    cooldown: 2,
+    engageTimer: 0,
     touch: 0,
   })
 }
@@ -227,36 +257,67 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
   }
 
   // --- enemies ---
+  let shotsThisTick = 0
   for (const e of game.enemies) {
     const stats = ENEMIES[e.kind]
     const dx = p.x - e.x
     const dz = p.z - e.z
-    const d = Math.hypot(dx, dz) || 1
-    e.yaw = Math.atan2(-dx, -dz)
+    const rawDist = Math.hypot(dx, dz)
+    const d = rawDist || 1
+    const ux = dx / d
+    const uz = dz / d
 
-    if (d > stats.range * 0.55) {
-      const step = stats.speed * dt
-      const next = moveCircle(e, (dx / d) * step, (dz / d) * step, stats.radius, ARENA.half, game.obstacles)
-      e.x = next.x
-      e.z = next.z
-    }
+    e.cooldown = Math.max(0, e.cooldown - dt)
 
-    e.cooldown -= dt
-    if (d < stats.range && e.cooldown <= 0) {
-      e.cooldown = stats.fireDelay
-      const vx = (dx / d) * stats.bulletSpeed
-      const vz = (dz / d) * stats.bulletSpeed
-      pushBullet(game, {
-        x: e.x,
-        z: e.z,
-        vx,
-        vz,
-        life: 3,
-        damage: stats.damage,
-        radius: stats.bulletRadius,
-        hostile: true,
-      })
-      events?.push({ kind: 'shot', hostile: true, ownerId: e.id, x: e.x, z: e.z, vx, vz })
+    if (rawDist <= stats.detectRange) {
+      e.yaw = Math.atan2(-dx, -dz)
+      if (rawDist > stats.approachRange) {
+        const step = stats.speed * dt
+        const next = moveCircle(e, ux * step, uz * step, stats.radius, ARENA.half, game.obstacles)
+        e.x = next.x
+        e.z = next.z
+      }
+
+      const sdx = p.x - e.x
+      const sdz = p.z - e.z
+      const sd = Math.hypot(sdx, sdz)
+      const sux = sd > 1e-6 ? sdx / sd : 0
+      const suz = sd > 1e-6 ? sdz / sd : 0
+      const hasLos =
+        sd <= 1e-6 ||
+        raycastArena(e.x, e.z, sux, suz, sd, ARENA.half, game.obstacles) >= sd - 1e-4
+
+      if (hasLos && sd <= stats.detectRange) {
+        e.engageTimer += dt
+      } else {
+        e.engageTimer = 0
+      }
+
+      if (
+        hasLos &&
+        sd <= stats.fireRange &&
+        e.engageTimer >= stats.reaction &&
+        e.cooldown <= 0 &&
+        shotsThisTick < MAX_SIMULTANEOUS_FIRE
+      ) {
+        shotsThisTick++
+        e.cooldown = stats.fireDelay
+        const vx = sux * stats.bulletSpeed
+        const vz = suz * stats.bulletSpeed
+        pushBullet(game, {
+          x: e.x,
+          z: e.z,
+          vx,
+          vz,
+          life: 3,
+          damage: stats.damage,
+          radius: stats.bulletRadius,
+          hostile: true,
+        })
+        events?.push({ kind: 'shot', hostile: true, ownerId: e.id, x: e.x, z: e.z, vx, vz })
+      }
+    } else {
+      e.engageTimer = 0
     }
 
     e.touch -= dt
