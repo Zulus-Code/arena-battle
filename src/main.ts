@@ -207,12 +207,18 @@ const CAMERA_SCALE: Record<PlayerVehicleKind, number> = {
   heavy: 6.2 / 4.6,
 }
 
+const RECOIL_AMP: Record<PlayerVehicleKind, number> = {
+  buggy: 0.16,
+  tank: 0.24,
+  heavy: 0.38,
+}
+
 function buildPlayerModel(kind: PlayerVehicleKind): { view: VehicleView; turret: TurretView } {
   const view = createVehicle(templates, PLAYER_MODEL[kind])
   // Hide the hull-fixed cannon on the player's tank so only the mouse-aimed turret barrel is visible.
   const nativeGun = view.root.getObjectByName('Tank_Gun')
   if (nativeGun) nativeGun.visible = false
-  const t = buildTurret(view.height)
+  const t = buildTurret(kind, view.height)
   // On boss.glb, Tank_Gun sticks above the hull roof, so seat the custom turret on the hull top instead of floating.
   t.root.position.y = view.height * (kind === 'heavy' ? 0.72 : 0.85)
   view.tiltGroup.add(t.root)
@@ -400,7 +406,7 @@ function syncPlayerVisuals(dt: number, alpha: number): void {
 
   // Turret barrel recoil spring-back.
   turretRecoil = Math.max(0, turretRecoil - dt * 9)
-  turret.recoilGroup.position.z = turretRecoil * 0.24
+  turret.recoilGroup.position.z = turretRecoil * RECOIL_AMP[game.vehicle]
 
   // Tire dust trail when moving.
   if (game.phase === 'playing' && Math.abs(forwardDot) > 0.025) {
