@@ -1,7 +1,15 @@
-import type { PlayerVehicleKind } from './config.ts'
+import { ARENA, type EnemyKind, type PlayerVehicleKind } from './config.ts'
 import type { Game } from './game.ts'
+import { toMapPoint } from './rules.ts'
 
 export type QualityPreset = 'high' | 'low'
+
+const MAP_SIZE = 180
+const ENEMY_MAP_RADIUS: Record<EnemyKind, number> = {
+  scout: 2.5,
+  tank: 3.5,
+  boss: 5,
+}
 
 export interface Hud {
   update(game: Game): void
@@ -27,6 +35,7 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
         <span data-wave>Волна: 1</span>
       </div>
     </div>
+    <canvas class="minimap" data-minimap></canvas>
     <button type="button" class="quality-btn" data-quality title="Переключить тени (G)">
       Графика: Высокая
     </button>
@@ -78,6 +87,20 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
   const menuBtn = root.querySelector<HTMLButtonElement>('[data-to-menu]')!
   const vehicleBtns = Array.from(root.querySelectorAll<HTMLButtonElement>('[data-vehicle]'))
   const flash = root.querySelector<HTMLElement>('[data-flash]')!
+  const minimap = root.querySelector<HTMLCanvasElement>('[data-minimap]')!
+  const mapCtx = minimap.getContext('2d')!
+  const mapPt = { mx: 0, my: 0 }
+  let mapDpr = 0
+
+  const syncMapDpr = () => {
+    const dpr = Math.max(1, window.devicePixelRatio || 1)
+    if (dpr === mapDpr) return
+    mapDpr = dpr
+    minimap.width = Math.round(MAP_SIZE * dpr)
+    minimap.height = Math.round(MAP_SIZE * dpr)
+    mapCtx.setTransform(dpr, 0, 0, dpr, 0, 0)
+  }
+  syncMapDpr()
 
   const bindBtn = (btn: HTMLButtonElement, fn: () => void) => {
     btn.addEventListener('click', (e) => {
@@ -124,6 +147,55 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
         if (game.phase === 'over') {
           final.textContent = `Счёт: ${game.score} · волн пройдено: ${Math.max(0, game.wave - 1)}`
         }
+      }
+
+      syncMapDpr()
+      const scale = MAP_SIZE / (ARENA.half * 2)
+
+      // 1. Arena background & frame.
+      mapCtx.clearRect(0, 0, MAP_SIZE, MAP_SIZE)
+      mapCtx.fillStyle = 'rgba(227, 221, 204, 0.35)'
+      mapCtx.fillRect(0, 0, MAP_SIZE, MAP_SIZE)
+      mapCtx.strokeStyle = 'rgba(16, 35, 61, 0.32)'
+      mapCtx.lineWidth = 1.5
+      mapCtx.strokeRect(0.75, 0.75, MAP_SIZE - 1.5, MAP_SIZE - 1.5)
+
+      // 2. Obstacles.
+      mapCtx.fillStyle = 'rgba(74, 80, 88, 0.78)'
+      for (let i = 0; i < game.obstacles.length; i++) {
+        const r = game.obstacles[i]
+        toMapPoint(r.x, r.z, MAP_SIZE, ARENA.half, mapPt)
+        const hw = r.hx * scale
+        const hh = r.hz * scale
+        mapCtx.fillRect(mapPt.mx - hw, mapPt.my - hh, hw * 2, hh * 2)
+      }
+
+      // 3. Player marker (green dot + heading line; yaw = 0 faces -Z = up on map).
+      toMapPoint(game.player.x, game.player.z, MAP_SIZE, ARENA.half, mapPt)
+      const dirX = -Math.sin(game.player.yaw)
+      const dirY = -Math.cos(game.player.yaw)
+      mapCtx.strokeStyle = '#1f7a3e'
+      mapCtx.lineWidth = 2.2
+      mapCtx.beginPath()
+      mapCtx.moveTo(mapPt.mx, mapPt.my)
+      mapCtx.lineTo(mapPt.mx + dirX * 9, mapPt.my + dirY * 9)
+      mapCtx.stroke()
+      mapCtx.fillStyle = '#2ea043'
+      mapCtx.beginPath()
+      mapCtx.arc(mapPt.mx, mapPt.my, 4, 0, Math.PI * 2)
+      mapCtx.fill()
+      mapCtx.strokeStyle = '#10233d'
+      mapCtx.lineWidth = 1
+      mapCtx.stroke()
+
+      // 4. Bots (red dots sized by class).
+      mapCtx.fillStyle = '#d93b3b'
+      for (let i = 0; i < game.enemies.length; i++) {
+        const e = game.enemies[i]
+        toMapPoint(e.x, e.z, MAP_SIZE, ARENA.half, mapPt)
+        mapCtx.beginPath()
+        mapCtx.arc(mapPt.mx, mapPt.my, ENEMY_MAP_RADIUS[e.kind], 0, Math.PI * 2)
+        mapCtx.fill()
       }
     },
     triggerHit() {

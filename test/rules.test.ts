@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { circlesHit, moveCircle, mulberry32, raycastArena, raycastCircle, type Rect } from '../src/rules.ts'
+import { circlesHit, moveCircle, mulberry32, raycastArena, raycastCircle, toMapPoint, type Rect } from '../src/rules.ts'
 
 test('moveCircle keeps the vehicle inside the arena', () => {
   const p = moveCircle({ x: 9.5, z: 0 }, 5, 0, 1, 10, [])
@@ -47,4 +47,21 @@ test('raycastCircle returns intersection distance or maxDist on miss', () => {
 
   const miss = raycastCircle(0, 0, 0, -1, 5, -10, 1.5, 40)
   assert.equal(miss, 40)
+})
+
+test('toMapPoint maps arena center, edges and signed axes linearly', () => {
+  const size = 180
+  const half = 22
+
+  assert.deepEqual(toMapPoint(0, 0, size, half), { mx: 90, my: 90 })
+  assert.deepEqual(toMapPoint(half, 0, size, half), { mx: 180, my: 90 })
+  assert.deepEqual(toMapPoint(-half, 0, size, half), { mx: 0, my: 90 })
+  assert.deepEqual(toMapPoint(0, half, size, half), { mx: 90, my: 180 })
+  assert.deepEqual(toMapPoint(0, -half, size, half), { mx: 90, my: 0 })
+
+  const pos = toMapPoint(5.5, -11, size, half)
+  const neg = toMapPoint(-5.5, 11, size, half)
+  assert.ok(Math.abs(pos.mx + neg.mx - size) < 1e-9, 'x sign symmetry around center')
+  assert.ok(Math.abs(pos.my + neg.my - size) < 1e-9, 'z sign symmetry around center')
+  assert.ok(pos.mx > size / 2 && pos.my < size / 2, '+x is right, -z is up')
 })

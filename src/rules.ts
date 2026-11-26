@@ -147,6 +147,25 @@ export function raycastCircle(
   return t >= 0 && t < maxDist ? t : maxDist
 }
 
+export interface MapPoint {
+  mx: number
+  my: number
+}
+
+/** Linearly projects world (x, z) inside [-half, half] to 2D minimap [0, size] coordinates. */
+export function toMapPoint(
+  x: number,
+  z: number,
+  size: number,
+  half: number,
+  out: MapPoint = { mx: 0, my: 0 },
+): MapPoint {
+  const scale = size / (half * 2)
+  out.mx = (x + half) * scale
+  out.my = (z + half) * scale
+  return out
+}
+
 /** Deterministic RNG so waves are reproducible in tests and replays. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0
