@@ -1,4 +1,13 @@
-import { ARENA, BULLET, ENEMIES, PLAYER, WAVE, type EnemyKind } from './config.ts'
+import {
+  ARENA,
+  BULLET,
+  ENEMIES,
+  PLAYER,
+  PLAYER_VEHICLES,
+  WAVE,
+  type EnemyKind,
+  type PlayerVehicleKind,
+} from './config.ts'
 import { circlesHit, moveCircle, mulberry32, type Rect } from './rules.ts'
 
 export interface Bullet {
@@ -30,6 +39,7 @@ export interface PlayerState {
   /** World aim heading of the turret (0 = -Z). */
   turret: number
   hp: number
+  maxHp: number
   cooldown: number
 }
 
@@ -52,6 +62,7 @@ export interface Input {
 
 export interface Game {
   phase: Phase
+  vehicle: PlayerVehicleKind
   player: PlayerState
   enemies: Enemy[]
   bullets: Bullet[]
@@ -67,10 +78,16 @@ export interface Game {
   rng: () => number
 }
 
-export function createGame(obstacles: readonly Rect[]): Game {
+function makePlayer(vehicle: PlayerVehicleKind): PlayerState {
+  const hp = PLAYER_VEHICLES[vehicle].hp
+  return { x: 0, z: 0, yaw: 0, turret: 0, hp, maxHp: hp, cooldown: 0 }
+}
+
+export function createGame(obstacles: readonly Rect[], vehicle: PlayerVehicleKind = 'buggy'): Game {
   return {
     phase: 'menu',
-    player: { x: 0, z: 0, yaw: 0, turret: 0, hp: PLAYER.hp, cooldown: 0 },
+    vehicle,
+    player: makePlayer(vehicle),
     enemies: [],
     bullets: [],
     obstacles,
@@ -87,7 +104,7 @@ export function createGame(obstacles: readonly Rect[]): Game {
 }
 
 function resetState(game: Game): void {
-  game.player = { x: 0, z: 0, yaw: 0, turret: 0, hp: PLAYER.hp, cooldown: 0 }
+  game.player = makePlayer(game.vehicle)
   game.enemies.length = 0
   game.bullets.length = 0
   game.score = 0
@@ -99,7 +116,16 @@ function resetState(game: Game): void {
   game.shake = 0
 }
 
-export function start(game: Game): void {
+export function setVehicle(game: Game, vehicle: PlayerVehicleKind): void {
+  if (game.phase !== 'menu') return
+  game.vehicle = vehicle
+  const hp = PLAYER_VEHICLES[vehicle].hp
+  game.player.hp = hp
+  game.player.maxHp = hp
+}
+
+export function start(game: Game, vehicle: PlayerVehicleKind = game.vehicle): void {
+  game.vehicle = vehicle
   resetState(game)
   game.phase = 'playing'
   beginWave(game, 1)
@@ -155,10 +181,11 @@ function pushBullet(game: Game, bullet: Bullet): void {
 export function update(game: Game, dt: number, input: Input, events?: FxEvent[]): void {
   if (game.phase !== 'playing') return
   const p = game.player
+  const playerStats = PLAYER_VEHICLES[game.vehicle]
 
   // Hull: A/D steer, W/S drive. The vehicle never slides sideways.
-  if (input.left) p.yaw += PLAYER.turnSpeed * dt
-  if (input.right) p.yaw -= PLAYER.turnSpeed * dt
+  if (input.left) p.yaw += playerStats.turnSpeed * dt
+  if (input.right) p.yaw -= playerStats.turnSpeed * dt
   p.turret += input.yawDelta
   p.cooldown -= dt
   game.shake = Math.max(0, game.shake - dt * 2.5)
@@ -169,8 +196,8 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
   if (input.forward) drive += 1
   if (input.back) drive -= 1
   if (drive !== 0) {
-    const step = PLAYER.speed * dt * drive
-    const next = moveCircle(p, -sin * step, -cos * step, PLAYER.radius, ARENA.half, game.obstacles)
+    const step = playerStats.speed * dt * drive
+    const next = moveCircle(p, -sin * step, -cos * step, playerStats.radius, ARENA.half, game.obstacles)
     p.x = next.x
     p.z = next.z
   }
@@ -230,7 +257,7 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
     }
 
     e.touch -= dt
-    if (e.touch <= 0 && circlesHit(p.x, p.z, PLAYER.radius, e.x, e.z, stats.radius)) {
+    if (e.touch <= 0 && circlesHit(p.x, p.z, playerStats.radius, e.x, e.z, stats.radius)) {
       e.touch = 0.6
       p.hp -= 8
       game.shake = 0.3
@@ -261,7 +288,7 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
   for (const b of game.bullets) {
     if (b.life <= 0) continue
     if (b.hostile) {
-      if (circlesHit(b.x, b.z, BULLET.radius, p.x, p.z, PLAYER.radius)) {
+      if (circlesHit(b.x, b.z, BULLET.radius, p.x, p.z, playerStats.radius)) {
         p.hp -= b.damage
         b.life = 0
         game.shake = 0.35

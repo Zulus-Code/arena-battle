@@ -1,6 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createGame, pause, resume, returnToMenu, start, update, type FxEvent, type Input } from '../src/game.ts'
+import { PLAYER_VEHICLES } from '../src/config.ts'
+import { createGame, pause, resume, returnToMenu, setVehicle, start, update, type FxEvent, type Input } from '../src/game.ts'
 
 const idle: Input = { forward: false, back: false, left: false, right: false, firing: false, yawDelta: 0 }
 
@@ -175,4 +176,66 @@ test('pause/resume only apply during playing/paused and returnToMenu resets stat
   assert.equal(g.phase, 'over')
   resume(g)
   assert.equal(g.phase, 'over')
+})
+
+test('start() with tank gives tank hp and speed, while buggy keeps original values', () => {
+  const buggyGame = createGame([], 'buggy')
+  start(buggyGame, 'buggy')
+  assert.equal(buggyGame.vehicle, 'buggy')
+  assert.equal(buggyGame.player.hp, PLAYER_VEHICLES.buggy.hp)
+  assert.equal(buggyGame.player.maxHp, PLAYER_VEHICLES.buggy.hp)
+  assert.equal(buggyGame.player.hp, 100)
+
+  const tankGame = createGame([], 'buggy')
+  start(tankGame, 'tank')
+  assert.equal(tankGame.vehicle, 'tank')
+  assert.equal(tankGame.player.hp, PLAYER_VEHICLES.tank.hp)
+  assert.equal(tankGame.player.maxHp, PLAYER_VEHICLES.tank.hp)
+  assert.ok(tankGame.player.hp > buggyGame.player.hp, 'tank should have more HP than buggy')
+
+  // Same 10 frames of forward driving: tank moves slower than buggy.
+  for (let i = 0; i < 10; i++) {
+    update(buggyGame, 1 / 60, { ...idle, forward: true })
+    update(tankGame, 1 / 60, { ...idle, forward: true })
+  }
+  const buggyDist = -buggyGame.player.z
+  const tankDist = -tankGame.player.z
+  assert.ok(Math.abs(buggyDist - (PLAYER_VEHICLES.buggy.speed * 10) / 60) < 1e-6)
+  assert.ok(Math.abs(tankDist - (PLAYER_VEHICLES.tank.speed * 10) / 60) < 1e-6)
+  assert.ok(tankDist < buggyDist, 'tank should be slower than buggy')
+
+  // Same 10 frames of turning: tank turns slower than buggy.
+  update(buggyGame, 1 / 60, { ...idle, left: true })
+  update(tankGame, 1 / 60, { ...idle, left: true })
+  assert.ok(tankGame.player.yaw < buggyGame.player.yaw, 'tank should turn slower than buggy')
+
+  // Tank survives 110 damage while buggy dies.
+  buggyGame.enemies.length = 0
+  buggyGame.toSpawn = 0
+  tankGame.enemies.length = 0
+  tankGame.toSpawn = 0
+  buggyGame.bullets.push({ x: buggyGame.player.x, z: buggyGame.player.z, vx: 0, vz: 0, life: 1, damage: 110, hostile: true })
+  tankGame.bullets.push({ x: tankGame.player.x, z: tankGame.player.z, vx: 0, vz: 0, life: 1, damage: 110, hostile: true })
+  update(buggyGame, 1 / 60, idle)
+  update(tankGame, 1 / 60, idle)
+  assert.equal(buggyGame.phase, 'over')
+  assert.equal(tankGame.phase, 'playing')
+  assert.equal(tankGame.player.hp, PLAYER_VEHICLES.tank.hp - 110)
+})
+
+test('setVehicle() updates chosen vehicle in menu and preserves it across restart', () => {
+  const g = createGame([])
+  assert.equal(g.vehicle, 'buggy')
+  setVehicle(g, 'tank')
+  assert.equal(g.vehicle, 'tank')
+  assert.equal(g.player.hp, PLAYER_VEHICLES.tank.hp)
+  assert.equal(g.player.maxHp, PLAYER_VEHICLES.tank.hp)
+
+  start(g)
+  assert.equal(g.vehicle, 'tank')
+  assert.equal(g.player.hp, PLAYER_VEHICLES.tank.hp)
+
+  // Calling setVehicle while playing should not mutate active match vehicle.
+  setVehicle(g, 'buggy')
+  assert.equal(g.vehicle, 'tank')
 })

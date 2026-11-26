@@ -1,13 +1,13 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/webgpu'
 import './style.css'
-import { ARENA, ENEMIES, type EnemyKind } from './config.ts'
+import { ARENA, ENEMIES, PLAYER_VEHICLES, type EnemyKind, type PlayerVehicleKind } from './config.ts'
 import { createBulletSystem } from './bullets.ts'
 import { createFxSystem } from './fx.ts'
-import { createGame, pause, resume, returnToMenu, start, update, type FxEvent, type Game } from './game.ts'
+import { createGame, pause, resume, returnToMenu, setVehicle, start, update, type FxEvent, type Game } from './game.ts'
 import { createHud, type QualityPreset } from './hud.ts'
 import { createInput, requestLock } from './input.ts'
-import { buildTurret } from './meshes.ts'
+import { buildTurret, type TurretView } from './meshes.ts'
 import {
   createVehicle,
   loadVehicles,
@@ -101,7 +101,13 @@ buildStaticEnvironment(renderer, scene)
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 280)
 
 const { obstacles, sun } = buildArena(scene)
-const game: Game = createGame(obstacles)
+let selectedVehicle: PlayerVehicleKind = 'buggy'
+try {
+  if (localStorage.getItem('arena-vehicle') === 'tank') selectedVehicle = 'tank'
+} catch {
+  // Ignore storage access errors in restricted environments.
+}
+const game: Game = createGame(obstacles, selectedVehicle)
 const input = createInput(canvas)
 const fx = createFxSystem(scene)
 const bullets = createBulletSystem(scene)
@@ -168,6 +174,7 @@ function goToMenu(): void {
 
 const hud = createHud(ui, {
   onToggleQuality: () => applyQuality(quality === 'high' ? 'low' : 'high'),
+  onSelectVehicle: (kind) => selectPlayerVehicle(kind),
   onResume: () => {
     resumeGame()
     requestLock(canvas)
@@ -181,13 +188,30 @@ const hud = createHud(ui, {
   },
 })
 applyQuality(quality)
+hud.setVehicle(selectedVehicle)
 
 const templates = await loadVehicles()
 
-const player = createVehicle(templates, 'buggy')
-const turret = buildTurret(player.height)
-turret.root.position.y = player.height * 0.85
-player.tiltGroup.add(turret.root)
+const PLAYER_MODEL: Record<PlayerVehicleKind, VehicleKind> = {
+  buggy: 'buggy',
+  tank: 'tank',
+}
+
+function buildPlayerModel(kind: PlayerVehicleKind): { view: VehicleView; turret: TurretView } {
+  const view = createVehicle(templates, PLAYER_MODEL[kind])
+  const t = buildTurret(view.height)
+  t.root.position.y = view.height * 0.85
+  view.tiltGroup.add(t.root)
+  return { view, turret: t }
+}
+
+const playerModels: Record<PlayerVehicleKind, { view: VehicleView; turret: TurretView }> = {
+  buggy: buildPlayerModel('buggy'),
+  tank: buildPlayerModel('tank'),
+}
+
+let player = playerModels[selectedVehicle].view
+let turret = playerModels[selectedVehicle].turret
 scene.add(player.root)
 
 // Dynamic obstacle-clipped aim beam + impact dot anchored to the turret muzzle.
@@ -209,6 +233,29 @@ const aimDotMat = new MeshBasicNodeMaterial({ color: 0xffe885, toneMapped: false
 const aimDot = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), aimDotMat)
 aimDot.position.set(0, turret.muzzleY, turret.muzzleZ - 10)
 turret.root.add(aimDot)
+
+function selectPlayerVehicle(kind: PlayerVehicleKind): void {
+  if (game.phase !== 'menu') return
+  selectedVehicle = kind
+  setVehicle(game, kind)
+  hud.setVehicle(kind)
+  try {
+    localStorage.setItem('arena-vehicle', kind)
+  } catch {
+    // Ignore storage access errors.
+  }
+
+  scene.remove(player.root)
+  const next = playerModels[kind]
+  player = next.view
+  turret = next.turret
+  player.tiltGroup.rotation.set(0, 0, 0)
+  turret.recoilGroup.position.z = 0
+  aimBeam.position.set(0, turret.muzzleY, turret.muzzleZ)
+  aimDot.position.set(0, turret.muzzleY, turret.muzzleZ - 10)
+  turret.root.add(aimBeam, aimDot)
+  scene.add(player.root)
+}
 
 const ENEMY_MODEL: Record<EnemyKind, VehicleKind> = {
   scout: 'buggyEnemy',
@@ -245,6 +292,8 @@ function resetVisualState(): void {
   playerPitch = 0
   playerRoll = 0
   dustTimer = 0
+  player.tiltGroup.rotation.set(0, 0, 0)
+  turret.recoilGroup.position.z = 0
   for (const ev of enemyVisuals.values()) {
     setVehicleFlash(ev.view, 0)
     if (ev.view.gunNode) ev.view.gunNode.position.x = ev.view.gunRestX
@@ -265,8 +314,9 @@ function handleEvents(events: FxEvent[]): void {
       if (ev.ownerId === 0) {
         turretRecoil = 1
         const aim = game.player.turret
-        const mx = game.player.x - Math.sin(aim) * 1.65
-        const mz = game.player.z - Math.cos(aim) * 1.65
+        const muzzleDist = -turret.muzzleZ
+        const mx = game.player.x - Math.sin(aim) * muzzleDist
+        const mz = game.player.z - Math.cos(aim) * muzzleDist
         fx.spawnMuzzle(mx, player.height * 0.85 + turret.muzzleY, mz, dx, dz, false)
       } else {
         const enemyVis = enemyVisuals.get(ev.ownerId)
@@ -313,6 +363,10 @@ function syncPlayerVisuals(dt: number, alpha: number): void {
   prevPz = rz
 
   for (const w of player.wheels) w.rotation.x += forwardDot / 0.3
+  if (player.mixer && dt > 1e-4 && Math.abs(forwardDot) > 1e-4) {
+    const speedRatio = Math.min(1.2, Math.abs(forwardDot) / (PLAYER_VEHICLES[game.vehicle].speed * dt))
+    if (speedRatio > 0.05) player.mixer.update(dt * speedRatio)
+  }
 
   const targetSteer = (input.state.left ? 0.38 : 0) + (input.state.right ? -0.38 : 0)
   playerSteer += (targetSteer - playerSteer) * Math.min(1, dt * 14)

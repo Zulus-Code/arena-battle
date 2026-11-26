@@ -1,5 +1,19 @@
 export const ARENA = { half: 22, wallHeight: 3, wallThickness: 1.5 } as const
 
+export type PlayerVehicleKind = 'buggy' | 'tank'
+
+export interface PlayerVehicleStats {
+  speed: number
+  hp: number
+  turnSpeed: number
+  radius: number
+}
+
+export const PLAYER_VEHICLES: Record<PlayerVehicleKind, PlayerVehicleStats> = {
+  buggy: { speed: 15, hp: 100, turnSpeed: 2.8, radius: 1.1 },
+  tank: { speed: 10.5, hp: 160, turnSpeed: 2.0, radius: 1.45 },
+}
+
 export const PLAYER = {
   speed: 15,
   hp: 100,
