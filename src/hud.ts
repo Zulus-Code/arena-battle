@@ -1,8 +1,15 @@
 import { ARENA, type EnemyKind, type PlayerVehicleKind } from './config.ts'
 import type { Game } from './game.ts'
+import type { QualityPreset } from './quality.ts'
 import { toMapPoint } from './rules.ts'
 
-export type QualityPreset = 'high' | 'low'
+export type { QualityPreset }
+
+const QUALITY_LABELS: Record<QualityPreset, string> = {
+  high: 'Графика: Высокая',
+  balanced: 'Графика: Средняя',
+  low: 'Графика: Низкая',
+}
 
 const MAP_SIZE = 180
 const ENEMY_MAP_RADIUS: Record<EnemyKind, number> = {
@@ -36,7 +43,7 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
       </div>
     </div>
     <canvas class="minimap" data-minimap></canvas>
-    <button type="button" class="quality-btn" data-quality title="Переключить тени (G)">
+    <button type="button" class="quality-btn" data-quality title="Переключить графику (G)">
       Графика: Высокая
     </button>
     <div class="damage-flash" data-flash></div>
@@ -56,7 +63,7 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
           <span class="vehicle-meta">Тяжёлый · 240 HP</span>
         </button>
       </div>
-      <p>W/S — газ · A/D — руль · мышь — камера и башня · ЛКМ / Space — огонь · G — тени · Esc — пауза</p>
+      <p>W/S — газ · A/D — руль · мышь — камера и башня · ЛКМ / Space — огонь · G — графика · Esc — пауза</p>
       <p class="big">Клик — в бой</p>
     </div>
     <div class="overlay hide" data-paused>
@@ -204,7 +211,8 @@ export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
       flashTimer = window.setTimeout(() => flash.classList.remove('active'), 160)
     },
     setQuality(preset) {
-      qualityBtn.textContent = preset === 'high' ? 'Графика: Высокая' : 'Графика: Лёгкая'
+      qualityBtn.textContent = QUALITY_LABELS[preset]
+      qualityBtn.classList.toggle('balanced', preset === 'balanced')
       qualityBtn.classList.toggle('low', preset === 'low')
     },
     setVehicle(kind) {

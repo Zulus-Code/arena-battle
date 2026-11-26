@@ -107,6 +107,10 @@ body {
   background: rgba(255, 255, 255, 0.92);
 }
 
+.quality-btn.balanced {
+  background: rgba(244, 240, 224, 0.8);
+}
+
 .quality-btn.low {
   background: rgba(235, 224, 195, 0.8);
 }

@@ -5,7 +5,7 @@ import { ARENA, ENEMIES, PLAYER_VEHICLES, type EnemyKind, type PlayerVehicleKind
 import { createBulletSystem } from './bullets.ts'
 import { createFxSystem } from './fx.ts'
 import { createGame, pause, resume, returnToMenu, setVehicle, start, update, type FxEvent, type Game } from './game.ts'
-import { createHud, type QualityPreset } from './hud.ts'
+import { createHud } from './hud.ts'
 import { createInput, requestLock } from './input.ts'
 import { buildTurret, type TurretView } from './meshes.ts'
 import {
@@ -16,6 +16,7 @@ import {
   type VehicleView,
 } from './models.ts'
 import { createPerfOverlay, parsePerfConfig } from './perf.ts'
+import { nextQualityPreset, parseQualityPreset, QUALITY_PRESETS, type QualityPreset } from './quality.ts'
 import { raycastArena, raycastCircle } from './rules.ts'
 import { buildArena } from './scene.ts'
 
@@ -91,11 +92,22 @@ const canvas = document.querySelector<HTMLCanvasElement>('#game')!
 const ui = document.querySelector<HTMLElement>('#ui')!
 const perf = parsePerfConfig(window.location.search)
 
-const renderer = new WebGPURenderer(
-  perf?.aa === '0'
-    ? { canvas, antialias: false, samples: 0, alpha: false }
-    : { canvas, antialias: true, alpha: false },
-)
+// WebGPURenderer antialias/samples cannot be changed on the fly without recreating the renderer
+// (never recreate at runtime); read the saved preset before renderer construction.
+let quality: QualityPreset = 'high'
+try {
+  quality = parseQualityPreset(localStorage.getItem('arena-quality'))
+} catch {
+  // Ignore storage access errors in restricted environments.
+}
+
+const initialSamples = perf?.aa === '0' ? 0 : QUALITY_PRESETS[quality].samples
+const renderer = new WebGPURenderer({
+  canvas,
+  antialias: initialSamples > 0,
+  samples: initialSamples,
+  alpha: false,
+})
 renderer.setSize(window.innerWidth, window.innerHeight)
 renderer.toneMapping = perf?.tm === '0' ? THREE.NoToneMapping : THREE.AgXToneMapping
 if (perf?.cs === 'linear') renderer.outputColorSpace = THREE.LinearSRGBColorSpace
@@ -127,21 +139,18 @@ const input = createInput(canvas)
 const fx = createFxSystem(scene)
 const bullets = createBulletSystem(scene)
 
-let quality: QualityPreset = 'high'
-try {
-  if (localStorage.getItem('arena-quality') === 'low') quality = 'low'
-} catch {
-  // Ignore storage access errors in restricted environments.
-}
-
+// Live preset switching updates only renderScale, shadows, and particles;
+// samples/antialias changes are saved to localStorage and take effect on next load.
 function applyQuality(preset: QualityPreset): void {
   quality = preset
-  const high = preset === 'high'
-  const pixelRatio = perf?.scale ?? Math.min(window.devicePixelRatio, high ? 1.5 : 1.0)
-  const shadowsEnabled = perf?.shadows === '0' ? false : perf?.shadows === 'basic' ? true : high
+  const spec = QUALITY_PRESETS[preset]
+  const pixelRatio = perf?.scale ?? Math.min(window.devicePixelRatio, 1.5) * spec.renderScale
+  const shadowsEnabled =
+    perf?.shadows === '0' ? false : perf?.shadows === 'basic' ? true : spec.shadows
   renderer.setPixelRatio(pixelRatio)
   renderer.shadowMap.enabled = shadowsEnabled
   sun.castShadow = shadowsEnabled
+  fx.setParticleScale(spec.particleScale)
   hud.setQuality(preset)
   try {
     localStorage.setItem('arena-quality', preset)
@@ -190,7 +199,7 @@ function goToMenu(): void {
 }
 
 const hud = createHud(ui, {
-  onToggleQuality: () => applyQuality(quality === 'high' ? 'low' : 'high'),
+  onToggleQuality: () => applyQuality(nextQualityPreset(quality)),
   onSelectVehicle: (kind) => selectPlayerVehicle(kind),
   onResume: () => {
     resumeGame()
@@ -214,7 +223,7 @@ const perfOverlay = perf
           ? 'basic'
           : 'pcf'
         : 'off'
-      return `buffer   ${canvas.width}x${canvas.height} | pr ${renderer.getPixelRatio().toFixed(2)} | q ${quality} | sh ${sh}`
+      return `buffer   ${canvas.width}x${canvas.height} | pr ${renderer.getPixelRatio().toFixed(2)} | aa ${initialSamples} | q ${quality} | sh ${sh}`
     })
   : null
 
@@ -590,7 +599,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && game.phase === 'over') {
     restartGame()
   } else if (e.code === 'KeyG') {
-    applyQuality(quality === 'high' ? 'low' : 'high')
+    applyQuality(nextQualityPreset(quality))
   }
 })
 

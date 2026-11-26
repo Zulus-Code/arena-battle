@@ -45,6 +45,7 @@ export interface FxSystem {
   spawnImpact(x: number, y: number, z: number, hostile: boolean): void
   spawnExplosion(x: number, z: number, kind: EnemyKind): void
   spawnDust(x: number, z: number, vx: number, vz: number, scale?: number): void
+  setParticleScale(scale: number): void
   update(dt: number): void
   reset(): void
 }
@@ -195,6 +196,7 @@ export function createFxSystem(scene: THREE.Scene): FxSystem {
   let ringCursor = 0
   let ringsActive = false
   let prevRings = 0
+  let particleScale = 1
 
   const mat4 = new THREE.Matrix4()
   const pos = new THREE.Vector3()
@@ -321,7 +323,8 @@ export function createFxSystem(scene: THREE.Scene): FxSystem {
         g,
         b,
       )
-      for (let i = 0; i < 3; i++) {
+      const burstCount = Math.max(1, Math.round(3 * particleScale))
+      for (let i = 0; i < burstCount; i++) {
         const spread = (Math.random() - 0.5) * 0.7
         const rx = dx * Math.cos(spread) - dz * Math.sin(spread)
         const rz = dx * Math.sin(spread) + dz * Math.cos(spread)
@@ -332,7 +335,8 @@ export function createFxSystem(scene: THREE.Scene): FxSystem {
 
     spawnImpact(x, y, z, hostile) {
       const [r, g, b] = hostile ? [1.0, 0.35, 0.45] : [1.0, 0.85, 0.35]
-      for (let i = 0; i < 6; i++) {
+      const sparkCount = Math.max(2, Math.round(6 * particleScale))
+      for (let i = 0; i < sparkCount; i++) {
         const a = Math.random() * Math.PI * 2
         const spd = 4 + Math.random() * 7
         setParticle(
@@ -352,29 +356,31 @@ export function createFxSystem(scene: THREE.Scene): FxSystem {
           b,
         )
       }
-      setParticle(
-        nextSlot(smokeRing),
-        x,
-        y + 0.1,
-        z,
-        (Math.random() - 0.5) * 1.2,
-        1.4,
-        (Math.random() - 0.5) * 1.2,
-        0.32,
-        0.55,
-        0.05,
-        -1.2,
-        0.75,
-        0.7,
-        0.62,
-      )
+      if (particleScale >= 0.7 || Math.random() < particleScale) {
+        setParticle(
+          nextSlot(smokeRing),
+          x,
+          y + 0.1,
+          z,
+          (Math.random() - 0.5) * 1.2,
+          1.4,
+          (Math.random() - 0.5) * 1.2,
+          0.32,
+          0.55,
+          0.05,
+          -1.2,
+          0.75,
+          0.7,
+          0.62,
+        )
+      }
     },
 
     spawnExplosion(x, z, kind) {
       const isBoss = kind === 'boss'
       const isTank = kind === 'tank'
-      const sparkCount = isBoss ? 28 : isTank ? 18 : 12
-      const smokeCount = isBoss ? 14 : isTank ? 9 : 6
+      const sparkCount = Math.max(4, Math.round((isBoss ? 28 : isTank ? 18 : 12) * particleScale))
+      const smokeCount = Math.max(2, Math.round((isBoss ? 14 : isTank ? 9 : 6) * particleScale))
       const power = isBoss ? 1.8 : isTank ? 1.3 : 1.0
 
       for (let i = 0; i < sparkCount; i++) {
@@ -436,6 +442,7 @@ export function createFxSystem(scene: THREE.Scene): FxSystem {
     },
 
     spawnDust(x, z, vx, vz, scale = 0.75) {
+      if (particleScale < 1 && Math.random() > particleScale) return
       setParticle(
         nextSlot(smokeRing),
         x + (Math.random() - 0.5) * 0.45,
@@ -452,6 +459,10 @@ export function createFxSystem(scene: THREE.Scene): FxSystem {
         0.74,
         0.56,
       )
+    },
+
+    setParticleScale(scale) {
+      particleScale = Math.max(0.25, Math.min(1, scale))
     },
 
     update(dt) {
