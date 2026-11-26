@@ -1,7 +1,8 @@
 import * as THREE from 'three'
 import { MeshBasicNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/webgpu'
 import './style.css'
-import { ARENA, BULLET, ENEMIES, type EnemyKind } from './config.ts'
+import { ARENA, ENEMIES, type EnemyKind } from './config.ts'
+import { createBulletSystem } from './bullets.ts'
 import { createFxSystem } from './fx.ts'
 import { createGame, pause, resume, returnToMenu, start, update, type FxEvent, type Game } from './game.ts'
 import { createHud, type QualityPreset } from './hud.ts'
@@ -103,6 +104,7 @@ const { obstacles, sun } = buildArena(scene)
 const game: Game = createGame(obstacles)
 const input = createInput(canvas)
 const fx = createFxSystem(scene)
+const bullets = createBulletSystem(scene)
 
 let quality: QualityPreset = 'high'
 try {
@@ -217,28 +219,6 @@ const freeByKind: Record<EnemyKind, VehicleView[]> = { scout: [], tank: [], boss
 const enemyVisuals = new Map<number, EnemyVisual>()
 const seenEnemies = new Set<number>()
 
-// Stretched tracer bolts oriented along velocity (2 InstancedMesh draw calls total).
-const bulletGeo = new THREE.CylinderGeometry(0.1, 0.17, 1.05, 6)
-bulletGeo.rotateX(Math.PI / 2)
-function bulletPool(color: number): THREE.InstancedMesh {
-  const mesh = new THREE.InstancedMesh(
-    bulletGeo,
-    new MeshBasicNodeMaterial({ color, toneMapped: false }),
-    BULLET.max,
-  )
-  mesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage)
-  mesh.frustumCulled = false
-  mesh.count = 0
-  scene.add(mesh)
-  return mesh
-}
-const friendlyBullets = bulletPool(0xffe56b)
-const hostileBullets = bulletPool(0xff4f73)
-const matrix = new THREE.Matrix4()
-const posVec = new THREE.Vector3()
-const quat = new THREE.Quaternion()
-const sclVec = new THREE.Vector3(1, 1, 1)
-const upAxis = new THREE.Vector3(0, 1, 0)
 const camFollow = new THREE.Vector3()
 const camTarget = new THREE.Vector3()
 
@@ -273,6 +253,7 @@ function resetVisualState(): void {
   }
   enemyVisuals.clear()
   fx.reset()
+  bullets.reset()
 }
 
 function handleEvents(events: FxEvent[]): void {
@@ -446,33 +427,6 @@ function syncEnemies(dt: number, alpha: number): void {
   }
 }
 
-function syncBullets(): void {
-  let friendly = 0
-  let hostile = 0
-  for (const b of game.bullets) {
-    const yaw = Math.atan2(b.vx, b.vz)
-    posVec.set(b.x, 0.9, b.z)
-    quat.setFromAxisAngle(upAxis, yaw)
-    matrix.compose(posVec, quat, sclVec)
-    if (b.hostile) hostileBullets.setMatrixAt(hostile++, matrix)
-    else friendlyBullets.setMatrixAt(friendly++, matrix)
-  }
-
-  friendlyBullets.count = friendly
-  hostileBullets.count = hostile
-
-  if (friendly > 0) {
-    friendlyBullets.instanceMatrix.clearUpdateRanges()
-    friendlyBullets.instanceMatrix.addUpdateRange(0, friendly * 16)
-    friendlyBullets.instanceMatrix.needsUpdate = true
-  }
-  if (hostile > 0) {
-    hostileBullets.instanceMatrix.clearUpdateRanges()
-    hostileBullets.instanceMatrix.addUpdateRange(0, hostile * 16)
-    hostileBullets.instanceMatrix.needsUpdate = true
-  }
-}
-
 function syncCamera(dt: number, alpha: number): void {
   const p = game.player
   const rx = prevPlayer.x + (p.x - prevPlayer.x) * alpha
@@ -591,7 +545,7 @@ function frame(now: number): void {
     handleEvents(frameEvents)
     fx.update(dt)
   }
-  syncBullets()
+  bullets.sync(game.bullets, camera, paused)
   syncCamera(simDt, alpha)
   hud.update(game)
   renderer.render(scene, camera)
