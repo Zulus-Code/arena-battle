@@ -27,13 +27,19 @@ export interface PlayerState {
   z: number
   /** Hull heading. */
   yaw: number
-  /** Turret offset from the hull heading (0 = straight ahead). */
+  /** World aim heading of the turret (0 = -Z). */
   turret: number
   hp: number
   cooldown: number
 }
 
 export type Phase = 'menu' | 'playing' | 'over'
+
+export type FxEvent =
+  | { kind: 'shot'; hostile: boolean; ownerId: number; x: number; z: number; vx: number; vz: number }
+  | { kind: 'wallHit'; hostile: boolean; x: number; z: number }
+  | { kind: 'enemyHit'; id: number; enemyKind: EnemyKind; x: number; z: number; killed: boolean }
+  | { kind: 'playerHit'; x: number; z: number; damage: number }
 
 export interface Input {
   forward: boolean
@@ -129,7 +135,7 @@ function pushBullet(game: Game, bullet: Bullet): void {
   if (game.bullets.length < BULLET.max) game.bullets.push(bullet)
 }
 
-export function update(game: Game, dt: number, input: Input): void {
+export function update(game: Game, dt: number, input: Input, events?: FxEvent[]): void {
   if (game.phase !== 'playing') return
   const p = game.player
 
@@ -152,21 +158,26 @@ export function update(game: Game, dt: number, input: Input): void {
     p.z = next.z
   }
 
-  // Turret fires at its own angle over the hull heading.
+  // Turret aims in world coordinates independently of hull steering.
   if (input.firing && p.cooldown <= 0) {
     p.cooldown = PLAYER.fireDelay
-    const aim = p.yaw + p.turret
+    const aim = p.turret
     const tsin = Math.sin(aim)
     const tcos = Math.cos(aim)
+    const bx = p.x - tsin * 1.6
+    const bz = p.z - tcos * 1.6
+    const vx = -tsin * PLAYER.bulletSpeed
+    const vz = -tcos * PLAYER.bulletSpeed
     pushBullet(game, {
-      x: p.x - tsin * 1.6,
-      z: p.z - tcos * 1.6,
-      vx: -tsin * PLAYER.bulletSpeed,
-      vz: -tcos * PLAYER.bulletSpeed,
+      x: bx,
+      z: bz,
+      vx,
+      vz,
       life: BULLET.life,
       damage: PLAYER.damage,
       hostile: false,
     })
+    events?.push({ kind: 'shot', hostile: false, ownerId: 0, x: bx, z: bz, vx, vz })
   }
 
   // --- enemies ---
@@ -187,15 +198,18 @@ export function update(game: Game, dt: number, input: Input): void {
     e.cooldown -= dt
     if (d < stats.range && e.cooldown <= 0) {
       e.cooldown = stats.fireDelay
+      const vx = (dx / d) * stats.bulletSpeed
+      const vz = (dz / d) * stats.bulletSpeed
       pushBullet(game, {
         x: e.x,
         z: e.z,
-        vx: (dx / d) * stats.bulletSpeed,
-        vz: (dz / d) * stats.bulletSpeed,
+        vx,
+        vz,
         life: 3,
         damage: stats.damage,
         hostile: true,
       })
+      events?.push({ kind: 'shot', hostile: true, ownerId: e.id, x: e.x, z: e.z, vx, vz })
     }
 
     e.touch -= dt
@@ -203,6 +217,7 @@ export function update(game: Game, dt: number, input: Input): void {
       e.touch = 0.6
       p.hp -= 8
       game.shake = 0.3
+      events?.push({ kind: 'playerHit', x: p.x, z: p.z, damage: 8 })
     }
   }
 
@@ -214,11 +229,13 @@ export function update(game: Game, dt: number, input: Input): void {
 
     if (Math.abs(b.x) > ARENA.half - 0.4 || Math.abs(b.z) > ARENA.half - 0.4) {
       b.life = 0
+      events?.push({ kind: 'wallHit', hostile: b.hostile, x: b.x, z: b.z })
       continue
     }
     for (const r of game.obstacles) {
       if (Math.abs(b.x - r.x) < r.hx && Math.abs(b.z - r.z) < r.hz) {
         b.life = 0
+        events?.push({ kind: 'wallHit', hostile: b.hostile, x: b.x, z: b.z })
         break
       }
     }
@@ -231,6 +248,7 @@ export function update(game: Game, dt: number, input: Input): void {
         p.hp -= b.damage
         b.life = 0
         game.shake = 0.35
+        events?.push({ kind: 'playerHit', x: b.x, z: b.z, damage: b.damage })
       }
     } else {
       for (const e of game.enemies) {
@@ -238,11 +256,20 @@ export function update(game: Game, dt: number, input: Input): void {
         if (circlesHit(b.x, b.z, BULLET.radius, e.x, e.z, ENEMIES[e.kind].radius)) {
           e.hp -= b.damage
           b.life = 0
-          if (e.hp <= 0) {
+          const killed = e.hp <= 0
+          if (killed) {
             game.score += ENEMIES[e.kind].score
             game.kills++
             game.shake = Math.max(game.shake, 0.18)
           }
+          events?.push({
+            kind: 'enemyHit',
+            id: e.id,
+            enemyKind: e.kind,
+            x: killed ? e.x : b.x,
+            z: killed ? e.z : b.z,
+            killed,
+          })
           break
         }
       }

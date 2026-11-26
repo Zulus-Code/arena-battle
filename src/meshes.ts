@@ -1,38 +1,86 @@
 import * as THREE from 'three'
-import { MeshLambertNodeMaterial } from 'three/webgpu'
+import { MeshStandardNodeMaterial } from 'three/webgpu'
 
-const flat = (color: number): MeshLambertNodeMaterial =>
-  new MeshLambertNodeMaterial({ color, flatShading: true })
+export interface TurretView {
+  root: THREE.Group
+  recoilGroup: THREE.Group
+  muzzleY: number
+  muzzleZ: number
+}
 
-const metal = flat(0x3a3f47)
-const accent = flat(0xd9b26b)
+const mat = (color: number, roughness: number, metalness: number, emissive = 0): MeshStandardNodeMaterial =>
+  new MeshStandardNodeMaterial({
+    color,
+    roughness,
+    metalness,
+    emissive,
+    emissiveIntensity: emissive ? 1.2 : 0,
+    flatShading: true,
+  })
+
+const gunmetal = mat(0x363b44, 0.42, 0.62)
+const brass = mat(0xd7ae64, 0.38, 0.44)
+const darkIron = mat(0x23272e, 0.5, 0.55)
+const optic = mat(0x3b8ea5, 0.2, 0.2, 0x39b8db)
 
 /**
- * Small roof-mounted gun for the player buggy. Scaled to the vehicle height so
- * it sits naturally on models from different packs.
+ * Roof-mounted gun turret for the player buggy with separate recoil sleeve
+ * and muzzle coordinates for the laser sight and muzzle flash.
  */
-export function buildTurret(vehicleHeight: number): THREE.Group {
+export function buildTurret(vehicleHeight: number): TurretView {
   const s = Math.max(0.6, vehicleHeight)
-  const turret = new THREE.Group()
+  const root = new THREE.Group()
 
-  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.28 * s, 0.32 * s, 0.2 * s, 10), metal)
-  base.position.y = 0.1 * s
-  turret.add(base)
+  const base = new THREE.Mesh(new THREE.CylinderGeometry(0.3 * s, 0.35 * s, 0.16 * s, 12), gunmetal)
+  base.position.y = 0.08 * s
+  base.castShadow = true
+  root.add(base)
 
-  const cupola = new THREE.Mesh(new THREE.CylinderGeometry(0.18 * s, 0.22 * s, 0.18 * s, 8), accent)
-  cupola.position.y = 0.27 * s
-  turret.add(cupola)
+  const housing = new THREE.Mesh(new THREE.BoxGeometry(0.42 * s, 0.22 * s, 0.48 * s), brass)
+  housing.position.set(0, 0.23 * s, 0.04 * s)
+  housing.castShadow = true
+  root.add(housing)
 
-  const barrelGeo = new THREE.CylinderGeometry(0.055 * s, 0.055 * s, 1.25 * s, 8)
+  const cupola = new THREE.Mesh(new THREE.CylinderGeometry(0.14 * s, 0.18 * s, 0.1 * s, 10), darkIron)
+  cupola.position.set(0, 0.38 * s, 0.08 * s)
+  cupola.castShadow = true
+  root.add(cupola)
+
+  const visor = new THREE.Mesh(new THREE.BoxGeometry(0.18 * s, 0.05 * s, 0.08 * s), optic)
+  visor.position.set(0, 0.37 * s, -0.08 * s)
+  root.add(visor)
+
+  const recoilGroup = new THREE.Group()
+  const barrelY = 0.22 * s
+  recoilGroup.position.set(0, barrelY, 0)
+
+  const shroudGeo = new THREE.CylinderGeometry(0.082 * s, 0.092 * s, 0.46 * s, 10)
+  shroudGeo.rotateX(Math.PI / 2)
+  const shroud = new THREE.Mesh(shroudGeo, darkIron)
+  shroud.position.z = -0.35 * s
+  shroud.castShadow = true
+  recoilGroup.add(shroud)
+
+  const barrelGeo = new THREE.CylinderGeometry(0.05 * s, 0.056 * s, 1.24 * s, 10)
   barrelGeo.rotateX(Math.PI / 2)
-  const barrel = new THREE.Mesh(barrelGeo, metal)
-  barrel.position.set(0, 0.22 * s, -0.62 * s)
-  turret.add(barrel)
+  const barrel = new THREE.Mesh(barrelGeo, gunmetal)
+  barrel.position.z = -0.68 * s
+  barrel.castShadow = true
+  recoilGroup.add(barrel)
 
-  const muzzle = new THREE.Mesh(new THREE.CylinderGeometry(0.09 * s, 0.09 * s, 0.16 * s, 8), accent)
-  muzzle.rotation.x = -Math.PI / 2
-  muzzle.position.set(0, 0.22 * s, -1.28 * s)
-  turret.add(muzzle)
+  const muzzleGeo = new THREE.CylinderGeometry(0.092 * s, 0.072 * s, 0.18 * s, 10)
+  muzzleGeo.rotateX(Math.PI / 2)
+  const muzzle = new THREE.Mesh(muzzleGeo, brass)
+  muzzle.position.z = -1.32 * s
+  muzzle.castShadow = true
+  recoilGroup.add(muzzle)
 
-  return turret
+  root.add(recoilGroup)
+
+  return {
+    root,
+    recoilGroup,
+    muzzleY: barrelY,
+    muzzleZ: -1.42 * s,
+  }
 }

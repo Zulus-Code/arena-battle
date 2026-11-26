@@ -44,7 +44,7 @@ export function createInput(canvas: HTMLCanvasElement): InputController {
     if (e.button === 0) mouseDown = false
   })
   window.addEventListener('mousemove', (e) => {
-    if (document.pointerLockElement === canvas) state.yawDelta -= e.movementX * 0.0011
+    if (document.pointerLockElement === canvas) state.yawDelta -= e.movementX * 0.0024
   })
 
   return {

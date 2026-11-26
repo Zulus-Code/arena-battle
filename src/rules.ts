@@ -74,6 +74,79 @@ export function moveCircle(
   return { x: clamp(x, -half + radius, half - radius), z: clamp(z, -half + radius, half - radius) }
 }
 
+/** Distance along unit ray (ox, oz) + t*(dx, dz) to the arena boundary or nearest rect. */
+export function raycastArena(
+  ox: number,
+  oz: number,
+  dx: number,
+  dz: number,
+  maxDist: number,
+  half: number,
+  rects: readonly Rect[],
+): number {
+  let best = maxDist
+  if (dx > 1e-8) best = Math.min(best, Math.max(0, (half - ox) / dx))
+  else if (dx < -1e-8) best = Math.min(best, Math.max(0, (-half - ox) / dx))
+  if (dz > 1e-8) best = Math.min(best, Math.max(0, (half - oz) / dz))
+  else if (dz < -1e-8) best = Math.min(best, Math.max(0, (-half - oz) / dz))
+
+  for (const r of rects) {
+    let txMin = -Infinity
+    let txMax = Infinity
+    if (Math.abs(dx) < 1e-8) {
+      if (ox < r.x - r.hx || ox > r.x + r.hx) continue
+    } else {
+      const t1 = (r.x - r.hx - ox) / dx
+      const t2 = (r.x + r.hx - ox) / dx
+      txMin = Math.min(t1, t2)
+      txMax = Math.max(t1, t2)
+    }
+
+    let tzMin = -Infinity
+    let tzMax = Infinity
+    if (Math.abs(dz) < 1e-8) {
+      if (oz < r.z - r.hz || oz > r.z + r.hz) continue
+    } else {
+      const t1 = (r.z - r.hz - oz) / dz
+      const t2 = (r.z + r.hz - oz) / dz
+      tzMin = Math.min(t1, t2)
+      tzMax = Math.max(t1, t2)
+    }
+
+    const tEnter = Math.max(txMin, tzMin)
+    const tExit = Math.min(txMax, tzMax)
+    if (tExit >= Math.max(0, tEnter) && tEnter < best) {
+      best = Math.max(0, tEnter)
+    }
+  }
+  return best
+}
+
+/** Distance along unit ray (ox, oz) + t*(dx, dz) to a circle, or maxDist if missed. */
+export function raycastCircle(
+  ox: number,
+  oz: number,
+  dx: number,
+  dz: number,
+  cx: number,
+  cz: number,
+  radius: number,
+  maxDist: number,
+): number {
+  const fx = ox - cx
+  const fz = oz - cz
+  const a = dx * dx + dz * dz
+  if (a < 1e-12) return maxDist
+  const b = fx * dx + fz * dz
+  const c = fx * fx + fz * fz - radius * radius
+  if (c <= 0) return 0
+  if (b > 0) return maxDist
+  const disc = b * b - a * c
+  if (disc < 0) return maxDist
+  const t = (-b - Math.sqrt(disc)) / a
+  return t >= 0 && t < maxDist ? t : maxDist
+}
+
 /** Deterministic RNG so waves are reproducible in tests and replays. */
 export function mulberry32(seed: number): () => number {
   let a = seed >>> 0

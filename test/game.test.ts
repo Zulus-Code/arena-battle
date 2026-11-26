@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createGame, start, update, type Input } from '../src/game.ts'
+import { createGame, start, update, type FxEvent, type Input } from '../src/game.ts'
 
 const idle: Input = { forward: false, back: false, left: false, right: false, firing: false, yawDelta: 0 }
 
@@ -58,23 +58,25 @@ test('turret aims independently of the hull', () => {
   assert.equal(g.enemies.some((e) => e.id === 7), false)
 })
 
-test('turret offset is relative to the hull and stays put when the mouse is idle', () => {
+test('turret world aim stays locked on target when steering the hull with A/D', () => {
   const g = createGame([])
   start(g)
   update(g, 1 / 60, { ...idle, yawDelta: 0.5 })
   assert.equal(g.player.turret, 0.5)
 
-  const offset = g.player.turret
+  const aim = g.player.turret
   for (let i = 0; i < 60; i++) update(g, 1 / 60, { ...idle, left: true })
-  assert.equal(g.player.turret, offset, 'hull turn must not change the turret offset')
+  assert.equal(g.player.turret, aim, 'steering the hull must not pull the turret aim off target')
+  assert.ok(g.player.yaw > 0, 'hull should still turn left')
 })
 
-test('bullets follow the hull heading when the turret offset is zero', () => {
+test('bullets fire along the turret aim even when the hull faces sideways', () => {
   const g = createGame([])
   start(g)
   g.enemies.length = 0
   g.toSpawn = 0
   g.player.yaw = Math.PI / 2 // hull faces -X
+  g.player.turret = Math.PI / 2 // aim turret toward -X
   g.enemies.push({ id: 5, kind: 'scout', x: -8, z: 0, yaw: 0, hp: 30, cooldown: 99, touch: 0 })
 
   for (let i = 0; i < 120; i++) update(g, 1 / 60, { ...idle, firing: true })
@@ -90,4 +92,26 @@ test('damage from an enemy bullet reduces player hp', () => {
   const before = g.player.hp
   for (let i = 0; i < 20; i++) update(g, 1 / 60, idle)
   assert.equal(g.player.hp, before - 15)
+})
+
+test('update emits shot, enemyHit, wallHit and playerHit events when buffer is provided', () => {
+  const g = createGame([{ x: 4, z: 0, hx: 1, hz: 1 }])
+  start(g)
+  g.enemies.length = 0
+  g.toSpawn = 0
+  g.enemies.push({ id: 42, kind: 'scout', x: 0, z: -4, yaw: 0, hp: 10, cooldown: 99, touch: 0 })
+
+  const events: FxEvent[] = []
+  for (let i = 0; i < 25; i++) update(g, 1 / 60, { ...idle, firing: true }, events)
+
+  assert.ok(events.some((e) => e.kind === 'shot' && !e.hostile))
+  assert.ok(events.some((e) => e.kind === 'enemyHit' && e.id === 42 && e.killed))
+
+  events.length = 0
+  g.bullets.push({ x: 3.1, z: 0, vx: 60, vz: 0, life: 1, damage: 10, hostile: false })
+  g.bullets.push({ x: 0, z: -0.5, vx: 0, vz: 60, life: 1, damage: 10, hostile: true })
+  update(g, 1 / 60, idle, events)
+
+  assert.ok(events.some((e) => e.kind === 'wallHit'))
+  assert.ok(events.some((e) => e.kind === 'playerHit' && e.damage === 10))
 })
