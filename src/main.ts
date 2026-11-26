@@ -15,6 +15,7 @@ import {
   type VehicleKind,
   type VehicleView,
 } from './models.ts'
+import { createPerfOverlay, parsePerfConfig } from './perf.ts'
 import { raycastArena, raycastCircle } from './rules.ts'
 import { buildArena } from './scene.ts'
 
@@ -88,19 +89,30 @@ function buildStaticEnvironment(renderer: WebGPURenderer, scene: THREE.Scene): T
 
 const canvas = document.querySelector<HTMLCanvasElement>('#game')!
 const ui = document.querySelector<HTMLElement>('#ui')!
+const perf = parsePerfConfig(window.location.search)
 
-const renderer = new WebGPURenderer({ canvas, antialias: true, alpha: false })
+const renderer = new WebGPURenderer(
+  perf?.aa === '0'
+    ? { canvas, antialias: false, samples: 0, alpha: false }
+    : { canvas, antialias: true, alpha: false },
+)
 renderer.setSize(window.innerWidth, window.innerHeight)
-renderer.toneMapping = THREE.AgXToneMapping
+renderer.toneMapping = perf?.tm === '0' ? THREE.NoToneMapping : THREE.AgXToneMapping
+if (perf?.cs === 'linear') renderer.outputColorSpace = THREE.LinearSRGBColorSpace
 renderer.toneMappingExposure = 1.05
-renderer.shadowMap.type = THREE.PCFShadowMap
+renderer.shadowMap.type = perf?.shadows === 'basic' ? THREE.BasicShadowMap : THREE.PCFShadowMap
+if (perf) renderer.info.autoReset = false
 await renderer.init()
 
 const scene = new THREE.Scene()
-buildStaticEnvironment(renderer, scene)
+if (perf?.ibl === '0') {
+  scene.environment = null
+} else {
+  buildStaticEnvironment(renderer, scene)
+}
 const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 280)
 
-const { obstacles, sun } = buildArena(scene)
+const { obstacles, sun } = buildArena(scene, perf?.bump === '0' ? { bump: false } : undefined)
 let selectedVehicle: PlayerVehicleKind = 'buggy'
 try {
   const savedVehicle = localStorage.getItem('arena-vehicle')
@@ -125,9 +137,11 @@ try {
 function applyQuality(preset: QualityPreset): void {
   quality = preset
   const high = preset === 'high'
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, high ? 1.5 : 1.0))
-  renderer.shadowMap.enabled = high
-  sun.castShadow = high
+  const pixelRatio = perf?.scale ?? Math.min(window.devicePixelRatio, high ? 1.5 : 1.0)
+  const shadowsEnabled = perf?.shadows === '0' ? false : perf?.shadows === 'basic' ? true : high
+  renderer.setPixelRatio(pixelRatio)
+  renderer.shadowMap.enabled = shadowsEnabled
+  sun.castShadow = shadowsEnabled
   hud.setQuality(preset)
   try {
     localStorage.setItem('arena-quality', preset)
@@ -192,6 +206,17 @@ const hud = createHud(ui, {
 })
 applyQuality(quality)
 hud.setVehicle(selectedVehicle)
+
+const perfOverlay = perf
+  ? createPerfOverlay(ui, perf, () => {
+      const sh = renderer.shadowMap.enabled
+        ? renderer.shadowMap.type === THREE.BasicShadowMap
+          ? 'basic'
+          : 'pcf'
+        : 'off'
+      return `buffer   ${canvas.width}x${canvas.height} | pr ${renderer.getPixelRatio().toFixed(2)} | q ${quality} | sh ${sh}`
+    })
+  : null
 
 const templates = await loadVehicles()
 
@@ -589,7 +614,7 @@ function snapshotPrev(): void {
   }
 }
 
-function frame(now: number): void {
+function tickFrame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.1)
   last = now
   frameEvents.length = 0
@@ -625,7 +650,33 @@ function frame(now: number): void {
   syncCamera(simDt, alpha)
   hud.update(game)
   renderer.render(scene, camera)
-  requestAnimationFrame(frame)
 }
 
-requestAnimationFrame(frame)
+if (perfOverlay) {
+  let prevFrameStart = 0
+  let hasPrevFrame = false
+  const perfFrame = (now: number): void => {
+    const frameStart = performance.now()
+    const frameDelta = hasPrevFrame ? frameStart - prevFrameStart : null
+    prevFrameStart = frameStart
+    hasPrevFrame = true
+
+    renderer.info.reset()
+    tickFrame(now)
+    const cpuMs = performance.now() - frameStart
+    perfOverlay.record(
+      frameDelta,
+      cpuMs,
+      renderer.info.render.drawCalls,
+      renderer.info.render.triangles,
+    )
+    requestAnimationFrame(perfFrame)
+  }
+  requestAnimationFrame(perfFrame)
+} else {
+  const frame = (now: number): void => {
+    tickFrame(now)
+    requestAnimationFrame(frame)
+  }
+  requestAnimationFrame(frame)
+}

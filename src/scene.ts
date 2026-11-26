@@ -9,6 +9,17 @@ export interface ArenaBuild {
   sun: THREE.DirectionalLight
 }
 
+export interface ArenaOptions {
+  /** Set false via `?perf=1&bump=0` to strip floor/wall bumpMap and roughnessMap for A/B fillrate testing. */
+  bump?: boolean
+}
+
+interface SurfaceMaps {
+  map: THREE.CanvasTexture
+  roughnessMap?: THREE.CanvasTexture
+  bumpMap?: THREE.CanvasTexture
+}
+
 interface PropSpec {
   kind: 'crate' | 'barrel' | 'block'
   x: number
@@ -68,17 +79,27 @@ function makeCanvas(w: number, h: number): [HTMLCanvasElement, CanvasRenderingCo
   return [c, c.getContext('2d')!]
 }
 
+function configureRepeatedTexture(
+  canvas: HTMLCanvasElement,
+  colorSpace: THREE.ColorSpace,
+  repeatX: number,
+  repeatY: number,
+): THREE.CanvasTexture {
+  const tex = new THREE.CanvasTexture(canvas)
+  tex.wrapS = tex.wrapT = THREE.RepeatWrapping
+  tex.repeat.set(repeatX, repeatY)
+  tex.anisotropy = 4
+  tex.colorSpace = colorSpace
+  return tex
+}
+
 /** Procedural sandstone tile albedo, roughness and bump textures (built once). */
-function arenaFloorMaps(): {
-  map: THREE.CanvasTexture
-  roughnessMap: THREE.CanvasTexture
-  bumpMap: THREE.CanvasTexture
-} {
+function arenaFloorMaps(withDetailMaps = true): SurfaceMaps {
   const size = 512
   const half = size / 2
   const [c, g] = makeCanvas(size, size)
-  const [rc, rg] = makeCanvas(size, size)
-  const [bc, bg] = makeCanvas(size, size)
+  const [rc, rg] = withDetailMaps ? makeCanvas(size, size) : [null, null]
+  const [bc, bg] = withDetailMaps ? makeCanvas(size, size) : [null, null]
   const rng = mulberry32(0x13572468)
 
   const tiles: Array<[number, number, string, number]> = [
@@ -91,10 +112,12 @@ function arenaFloorMaps(): {
   for (const [tx, ty, base, rough] of tiles) {
     g.fillStyle = base
     g.fillRect(tx, ty, half, half)
-    rg.fillStyle = `rgb(${rough},${rough},${rough})`
-    rg.fillRect(tx, ty, half, half)
-    bg.fillStyle = 'rgb(168,168,168)'
-    bg.fillRect(tx, ty, half, half)
+    if (rg && bg) {
+      rg.fillStyle = `rgb(${rough},${rough},${rough})`
+      rg.fillRect(tx, ty, half, half)
+      bg.fillStyle = 'rgb(168,168,168)'
+      bg.fillRect(tx, ty, half, half)
+    }
   }
 
   // Deterministic sand speckles and subtle tactical scuffs.
@@ -105,12 +128,14 @@ function arenaFloorMaps(): {
     const dark = rng() < 0.55
     g.fillStyle = dark ? 'rgba(95, 80, 52, 0.08)' : 'rgba(248, 238, 210, 0.07)'
     g.fillRect(x, y, w, w)
-    const rVal = dark ? 228 : 196
-    rg.fillStyle = `rgba(${rVal},${rVal},${rVal},0.35)`
-    rg.fillRect(x, y, w, w)
-    const bVal = dark ? 140 : 185
-    bg.fillStyle = `rgba(${bVal},${bVal},${bVal},0.35)`
-    bg.fillRect(x, y, w, w)
+    if (rg && bg) {
+      const rVal = dark ? 228 : 196
+      rg.fillStyle = `rgba(${rVal},${rVal},${rVal},0.35)`
+      rg.fillRect(x, y, w, w)
+      const bVal = dark ? 140 : 185
+      bg.fillStyle = `rgba(${bVal},${bVal},${bVal},0.35)`
+      bg.fillRect(x, y, w, w)
+    }
   }
 
   // Tile seams with subtle bevel edge.
@@ -122,49 +147,42 @@ function arenaFloorMaps(): {
     g.fillRect(pos + 4, 0, 2, size)
     g.fillRect(0, pos + 4, size, 2)
 
-    rg.fillStyle = 'rgb(244,244,244)'
-    rg.fillRect(pos, 0, 5, size)
-    rg.fillRect(0, pos, size, 5)
+    if (rg && bg) {
+      rg.fillStyle = 'rgb(244,244,244)'
+      rg.fillRect(pos, 0, 5, size)
+      rg.fillRect(0, pos, size, 5)
 
-    bg.fillStyle = 'rgb(90,90,90)'
-    bg.fillRect(pos, 0, 4, size)
-    bg.fillRect(0, pos, size, 4)
+      bg.fillStyle = 'rgb(90,90,90)'
+      bg.fillRect(pos, 0, 4, size)
+      bg.fillRect(0, pos, size, 4)
+    }
   }
 
-  const configure = (canvas: HTMLCanvasElement, colorSpace: THREE.ColorSpace): THREE.CanvasTexture => {
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-    tex.repeat.set(11, 11)
-    tex.anisotropy = 4
-    tex.colorSpace = colorSpace
-    return tex
-  }
-
+  const map = configureRepeatedTexture(c, THREE.SRGBColorSpace, 11, 11)
+  if (!rc || !bc) return { map }
   return {
-    map: configure(c, THREE.SRGBColorSpace),
-    roughnessMap: configure(rc, THREE.NoColorSpace),
-    bumpMap: configure(bc, THREE.NoColorSpace),
+    map,
+    roughnessMap: configureRepeatedTexture(rc, THREE.NoColorSpace, 11, 11),
+    bumpMap: configureRepeatedTexture(bc, THREE.NoColorSpace, 11, 11),
   }
 }
 
 /** Modular steel barrier panels + rivets + base ambient occlusion for arena walls. */
-function wallMaps(): {
-  map: THREE.CanvasTexture
-  roughnessMap: THREE.CanvasTexture
-  bumpMap: THREE.CanvasTexture
-} {
+function wallMaps(withDetailMaps = true): SurfaceMaps {
   const w = 512
   const h = 256
   const [c, g] = makeCanvas(w, h)
-  const [rc, rg] = makeCanvas(w, h)
-  const [bc, bg] = makeCanvas(w, h)
+  const [rc, rg] = withDetailMaps ? makeCanvas(w, h) : [null, null]
+  const [bc, bg] = withDetailMaps ? makeCanvas(w, h) : [null, null]
 
   g.fillStyle = '#6d8ba6'
   g.fillRect(0, 0, w, h)
-  rg.fillStyle = 'rgb(185,185,185)'
-  rg.fillRect(0, 0, w, h)
-  bg.fillStyle = 'rgb(155,155,155)'
-  bg.fillRect(0, 0, w, h)
+  if (rg && bg) {
+    rg.fillStyle = 'rgb(185,185,185)'
+    rg.fillRect(0, 0, w, h)
+    bg.fillStyle = 'rgb(155,155,155)'
+    bg.fillRect(0, 0, w, h)
+  }
 
   const panels = 8
   const pw = w / panels
@@ -172,24 +190,32 @@ function wallMaps(): {
     const x = i * pw
     g.fillStyle = i % 2 ? '#64829d' : '#7391ac'
     g.fillRect(x + 3, 10, pw - 6, h - 38)
-    bg.fillStyle = 'rgb(172,172,172)'
-    bg.fillRect(x + 3, 10, pw - 6, h - 38)
+    if (bg) {
+      bg.fillStyle = 'rgb(172,172,172)'
+      bg.fillRect(x + 3, 10, pw - 6, h - 38)
+    }
 
     // Seam shadow
     g.fillStyle = '#4f6981'
     g.fillRect(x, 0, 3, h)
-    bg.fillStyle = 'rgb(96,96,96)'
-    bg.fillRect(x, 0, 3, h)
+    if (bg) {
+      bg.fillStyle = 'rgb(96,96,96)'
+      bg.fillRect(x, 0, 3, h)
+    }
 
     // Rivets
     g.fillStyle = '#8fa9c2'
-    bg.fillStyle = 'rgb(220,220,220)'
-    rg.fillStyle = 'rgb(125,125,125)'
+    if (rg && bg) {
+      bg.fillStyle = 'rgb(220,220,220)'
+      rg.fillStyle = 'rgb(125,125,125)'
+    }
     for (const rx of [x + 10, x + pw - 14]) {
       for (const ry of [18, h - 44]) {
         g.fillRect(rx, ry, 4, 4)
-        bg.fillRect(rx, ry, 4, 4)
-        rg.fillRect(rx, ry, 4, 4)
+        if (rg && bg) {
+          bg.fillRect(rx, ry, 4, 4)
+          rg.fillRect(rx, ry, 4, 4)
+        }
       }
     }
   }
@@ -217,22 +243,17 @@ function wallMaps(): {
 
   g.fillStyle = '#8ba6bf'
   g.fillRect(0, 0, w, 8)
-  rg.fillStyle = 'rgb(145,145,145)'
-  rg.fillRect(0, 0, w, 8)
-
-  const configure = (canvas: HTMLCanvasElement, colorSpace: THREE.ColorSpace): THREE.CanvasTexture => {
-    const tex = new THREE.CanvasTexture(canvas)
-    tex.wrapS = tex.wrapT = THREE.RepeatWrapping
-    tex.repeat.set(7, 1)
-    tex.anisotropy = 4
-    tex.colorSpace = colorSpace
-    return tex
+  if (rg) {
+    rg.fillStyle = 'rgb(145,145,145)'
+    rg.fillRect(0, 0, w, 8)
   }
 
+  const map = configureRepeatedTexture(c, THREE.SRGBColorSpace, 7, 1)
+  if (!rc || !bc) return { map }
   return {
-    map: configure(c, THREE.SRGBColorSpace),
-    roughnessMap: configure(rc, THREE.NoColorSpace),
-    bumpMap: configure(bc, THREE.NoColorSpace),
+    map,
+    roughnessMap: configureRepeatedTexture(rc, THREE.NoColorSpace, 7, 1),
+    bumpMap: configureRepeatedTexture(bc, THREE.NoColorSpace, 7, 1),
   }
 }
 
@@ -347,8 +368,24 @@ function buildOuterTerrain(half: number): THREE.Group {
   return group
 }
 
+function makeSurfaceMaterial(
+  maps: SurfaceMaps,
+  bumpScale: number,
+  roughness: number,
+  metalness: number,
+): MeshStandardNodeMaterial {
+  const mat = new MeshStandardNodeMaterial({ map: maps.map, roughness, metalness })
+  if (maps.roughnessMap && maps.bumpMap) {
+    mat.roughnessMap = maps.roughnessMap
+    mat.bumpMap = maps.bumpMap
+    mat.bumpScale = bumpScale
+  }
+  return mat
+}
+
 /** Builds the batched arena, procedural PBR maps, sky, fog, lighting, and shadow rig. */
-export function buildArena(scene: THREE.Scene): ArenaBuild {
+export function buildArena(scene: THREE.Scene, options?: ArenaOptions): ArenaBuild {
+  const withDetailMaps = options?.bump !== false
   const half = ARENA.half
   const wallT = ARENA.wallThickness
   const wallH = ARENA.wallHeight
@@ -359,17 +396,10 @@ export function buildArena(scene: THREE.Scene): ArenaBuild {
   scene.add(buildOuterTerrain(half))
 
   // Arena floor
-  const floorMaps = arenaFloorMaps()
+  const floorMaps = arenaFloorMaps(withDetailMaps)
   const floor = new THREE.Mesh(
     new THREE.PlaneGeometry(half * 2, half * 2),
-    new MeshStandardNodeMaterial({
-      map: floorMaps.map,
-      roughnessMap: floorMaps.roughnessMap,
-      bumpMap: floorMaps.bumpMap,
-      bumpScale: 0.03,
-      roughness: 0.9,
-      metalness: 0.02,
-    }),
+    makeSurfaceMaterial(floorMaps, 0.03, 0.9, 0.02),
   )
   floor.rotation.x = -Math.PI / 2
   floor.receiveShadow = true
@@ -401,7 +431,7 @@ export function buildArena(scene: THREE.Scene): ArenaBuild {
   scene.add(markings)
 
   // Walls (4 merged into 1 mesh) + caps/pillars (merged into 1 vertex-colored mesh).
-  const wMaps = wallMaps()
+  const wMaps = wallMaps(withDetailMaps)
   const wallGeos: THREE.BufferGeometry[] = []
   const trimGeos: THREE.BufferGeometry[] = []
   const span = half * 2 + wallT * 2
@@ -437,14 +467,7 @@ export function buildArena(scene: THREE.Scene): ArenaBuild {
 
   const wallMesh = new THREE.Mesh(
     mergeGroup(wallGeos),
-    new MeshStandardNodeMaterial({
-      map: wMaps.map,
-      roughnessMap: wMaps.roughnessMap,
-      bumpMap: wMaps.bumpMap,
-      bumpScale: 0.035,
-      roughness: 0.78,
-      metalness: 0.18,
-    }),
+    makeSurfaceMaterial(wMaps, 0.035, 0.78, 0.18),
   )
   wallMesh.castShadow = true
   wallMesh.receiveShadow = true
