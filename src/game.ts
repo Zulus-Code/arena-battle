@@ -33,7 +33,7 @@ export interface PlayerState {
   cooldown: number
 }
 
-export type Phase = 'menu' | 'playing' | 'over'
+export type Phase = 'menu' | 'playing' | 'paused' | 'over'
 
 export type FxEvent =
   | { kind: 'shot'; hostile: boolean; ownerId: number; x: number; z: number; vx: number; vz: number }
@@ -86,8 +86,7 @@ export function createGame(obstacles: readonly Rect[]): Game {
   }
 }
 
-export function start(game: Game): void {
-  game.phase = 'playing'
+function resetState(game: Game): void {
   game.player = { x: 0, z: 0, yaw: 0, turret: 0, hp: PLAYER.hp, cooldown: 0 }
   game.enemies.length = 0
   game.bullets.length = 0
@@ -98,7 +97,25 @@ export function start(game: Game): void {
   game.spawnTimer = 0
   game.breakTimer = 0
   game.shake = 0
+}
+
+export function start(game: Game): void {
+  resetState(game)
+  game.phase = 'playing'
   beginWave(game, 1)
+}
+
+export function pause(game: Game): void {
+  if (game.phase === 'playing') game.phase = 'paused'
+}
+
+export function resume(game: Game): void {
+  if (game.phase === 'paused') game.phase = 'playing'
+}
+
+export function returnToMenu(game: Game): void {
+  resetState(game)
+  game.phase = 'menu'
 }
 
 function beginWave(game: Game, wave: number): void {

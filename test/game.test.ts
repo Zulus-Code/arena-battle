@@ -1,6 +1,6 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { createGame, start, update, type FxEvent, type Input } from '../src/game.ts'
+import { createGame, pause, resume, returnToMenu, start, update, type FxEvent, type Input } from '../src/game.ts'
 
 const idle: Input = { forward: false, back: false, left: false, right: false, firing: false, yawDelta: 0 }
 
@@ -114,4 +114,65 @@ test('update emits shot, enemyHit, wallHit and playerHit events when buffer is p
 
   assert.ok(events.some((e) => e.kind === 'wallHit'))
   assert.ok(events.some((e) => e.kind === 'playerHit' && e.damage === 10))
+})
+
+test('update() in paused does not move player, bullets, cooldowns or spawn enemies', () => {
+  const g = createGame([])
+  start(g)
+  g.player.cooldown = 0.5
+  g.bullets.push({ x: 0, z: -3, vx: 0, vz: -50, life: 1, damage: 10, hostile: false })
+  const enemyCountBefore = g.enemies.length
+  const toSpawnBefore = g.toSpawn
+  const spawnTimerBefore = g.spawnTimer
+
+  pause(g)
+  assert.equal(g.phase, 'paused')
+
+  const events: FxEvent[] = []
+  for (let i = 0; i < 120; i++) {
+    update(g, 1 / 60, { forward: true, back: false, left: true, right: false, firing: true, yawDelta: 0.4 }, events)
+  }
+
+  assert.equal(g.player.x, 0)
+  assert.equal(g.player.z, 0)
+  assert.equal(g.player.yaw, 0)
+  assert.equal(g.player.turret, 0)
+  assert.equal(g.player.cooldown, 0.5)
+  assert.equal(g.enemies.length, enemyCountBefore)
+  assert.equal(g.toSpawn, toSpawnBefore)
+  assert.equal(g.spawnTimer, spawnTimerBefore)
+  assert.equal(g.bullets[0].z, -3)
+  assert.equal(events.length, 0)
+
+  resume(g)
+  assert.equal(g.phase, 'playing')
+  update(g, 1 / 60, { ...idle, forward: true })
+  assert.ok(g.player.z < 0, 'player should move again after resume')
+})
+
+test('pause/resume only apply during playing/paused and returnToMenu resets state', () => {
+  const g = createGame([])
+  pause(g)
+  assert.equal(g.phase, 'menu')
+  resume(g)
+  assert.equal(g.phase, 'menu')
+
+  start(g)
+  g.score = 250
+  g.kills = 2
+  pause(g)
+  assert.equal(g.phase, 'paused')
+
+  returnToMenu(g)
+  assert.equal(g.phase, 'menu')
+  assert.equal(g.score, 0)
+  assert.equal(g.kills, 0)
+  assert.equal(g.enemies.length, 0)
+  assert.equal(g.bullets.length, 0)
+
+  g.phase = 'over'
+  pause(g)
+  assert.equal(g.phase, 'over')
+  resume(g)
+  assert.equal(g.phase, 'over')
 })

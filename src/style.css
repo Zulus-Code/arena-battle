@@ -137,4 +137,40 @@ body {
 .overlay p { margin: 0; font-size: 17px; color: #fff; }
 .overlay .big { font-size: 22px; font-weight: 700; }
 
+.pause-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 220px;
+  margin-top: 6px;
+}
+
+.menu-btn {
+  border: 1px solid rgba(16, 35, 61, 0.25);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font: 700 15px/1.2 inherit;
+  color: #10233d;
+  background: rgba(255, 255, 255, 0.84);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.08s ease;
+}
+
+.menu-btn:hover {
+  background: rgba(255, 255, 255, 0.96);
+}
+
+.menu-btn:active {
+  transform: translateY(1px);
+}
+
+.menu-btn.primary {
+  background: #ffe478;
+  border-color: rgba(16, 35, 61, 0.35);
+}
+
+.menu-btn.primary:hover {
+  background: #ffec99;
+}
+
 .hide { display: none; }

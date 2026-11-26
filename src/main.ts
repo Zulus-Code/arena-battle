@@ -3,7 +3,7 @@ import { MeshBasicNodeMaterial, PMREMGenerator, WebGPURenderer } from 'three/web
 import './style.css'
 import { ARENA, BULLET, ENEMIES, type EnemyKind } from './config.ts'
 import { createFxSystem } from './fx.ts'
-import { createGame, start, update, type FxEvent, type Game } from './game.ts'
+import { createGame, pause, resume, returnToMenu, start, update, type FxEvent, type Game } from './game.ts'
 import { createHud, type QualityPreset } from './hud.ts'
 import { createInput, requestLock } from './input.ts'
 import { buildTurret } from './meshes.ts'
@@ -125,7 +125,59 @@ function applyQuality(preset: QualityPreset): void {
   }
 }
 
-const hud = createHud(ui, () => applyQuality(quality === 'high' ? 'low' : 'high'))
+let lastPausedAt = 0
+
+function pauseGame(): void {
+  if (game.phase !== 'playing') return
+  pause(game)
+  lastPausedAt = performance.now()
+  input.clear()
+  acc = 0
+  snapshotPrev()
+}
+
+function resumeGame(): void {
+  if (game.phase !== 'paused') return
+  resume(game)
+  input.clear()
+  acc = 0
+  last = performance.now()
+  snapshotPrev()
+  prevPx = game.player.x
+  prevPz = game.player.z
+  prevRenderYaw = game.player.yaw
+}
+
+function restartGame(): void {
+  start(game)
+  resetVisualState()
+  input.clear()
+  acc = 0
+  last = performance.now()
+}
+
+function goToMenu(): void {
+  returnToMenu(game)
+  resetVisualState()
+  input.clear()
+  acc = 0
+  last = performance.now()
+}
+
+const hud = createHud(ui, {
+  onToggleQuality: () => applyQuality(quality === 'high' ? 'low' : 'high'),
+  onResume: () => {
+    resumeGame()
+    requestLock(canvas)
+  },
+  onRestart: () => {
+    restartGame()
+    requestLock(canvas)
+  },
+  onMenu: () => {
+    goToMenu()
+  },
+})
 applyQuality(quality)
 
 const templates = await loadVehicles()
@@ -433,7 +485,7 @@ function syncCamera(dt: number, alpha: number): void {
   const k = 1 - Math.pow(0.00005, dt)
   camera.position.lerp(camFollow, k)
   camera.lookAt(camTarget)
-  if (game.shake > 0) {
+  if (dt > 0 && game.shake > 0) {
     camera.position.x += (Math.random() - 0.5) * game.shake * 1.5
     camera.position.y += (Math.random() - 0.5) * game.shake * 1.5
   }
@@ -445,18 +497,43 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight)
 })
 
-window.addEventListener('click', () => {
-  if (game.phase !== 'playing') {
-    start(game)
-    resetVisualState()
+document.addEventListener('pointerlockchange', () => {
+  if (game.phase === 'playing' && document.pointerLockElement !== canvas) {
+    pauseGame()
   }
-  requestLock(canvas)
+})
+
+window.addEventListener('blur', () => {
+  if (game.phase === 'playing') pauseGame()
+})
+
+window.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement | null
+  if (target?.closest('button')) return
+  if (game.phase === 'menu' || game.phase === 'over') {
+    restartGame()
+    requestLock(canvas)
+  } else if (game.phase === 'playing') {
+    requestLock(canvas)
+  }
 })
 
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape') {
+    if (e.repeat) return
+    if (game.phase === 'playing') {
+      pauseGame()
+    } else if (game.phase === 'paused') {
+      // Esc resumes the game directly; skip the keydown that can fire alongside pointerlockchange on the same press.
+      if (performance.now() - lastPausedAt >= 250) {
+        resumeGame()
+        requestLock(canvas)
+      }
+    }
+    return
+  }
   if (e.code === 'KeyR' && game.phase === 'over') {
-    start(game)
-    resetVisualState()
+    restartGame()
   } else if (e.code === 'KeyG') {
     applyQuality(quality === 'high' ? 'low' : 'high')
   }
@@ -485,27 +562,37 @@ function snapshotPrev(): void {
 function frame(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.1)
   last = now
-  acc += dt
-  if (acc > STEP * 5) acc = STEP * 5
-
   frameEvents.length = 0
-  input.beginFrame()
-  while (acc >= STEP) {
-    snapshotPrev()
-    update(game, STEP, input.state, frameEvents)
-    // mouse delta belongs to the frame, not to every fixed step
-    input.state.yawDelta = 0
-    acc -= STEP
-  }
-  input.endFrame()
 
+  if (game.phase === 'paused') {
+    acc = 0
+    input.endFrame()
+  } else {
+    acc += dt
+    if (acc > STEP * 5) acc = STEP * 5
+
+    input.beginFrame()
+    while (acc >= STEP) {
+      snapshotPrev()
+      update(game, STEP, input.state, frameEvents)
+      // mouse delta belongs to the frame, not to every fixed step
+      input.state.yawDelta = 0
+      acc -= STEP
+    }
+    input.endFrame()
+  }
+
+  const paused = game.phase === 'paused'
+  const simDt = paused ? 0 : dt
   const alpha = game.phase === 'playing' ? acc / STEP : 1
-  syncPlayerVisuals(dt, alpha)
-  syncEnemies(dt, alpha)
-  handleEvents(frameEvents)
-  fx.update(dt)
+  syncPlayerVisuals(simDt, alpha)
+  syncEnemies(simDt, alpha)
+  if (!paused) {
+    handleEvents(frameEvents)
+    fx.update(dt)
+  }
   syncBullets()
-  syncCamera(dt, alpha)
+  syncCamera(simDt, alpha)
   hud.update(game)
   renderer.render(scene, camera)
   requestAnimationFrame(frame)

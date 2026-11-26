@@ -13,6 +13,8 @@ export interface InputController {
   beginFrame(): void
   /** Clear the accumulated mouse delta after the frame used it. */
   endFrame(): void
+  /** Reset all held keys, mouse button state, and motion deltas (used on pause/resume). */
+  clear(): void
 }
 
 export function createInput(canvas: HTMLCanvasElement): InputController {
@@ -59,9 +61,24 @@ export function createInput(canvas: HTMLCanvasElement): InputController {
     endFrame() {
       state.yawDelta = 0
     },
+    clear() {
+      keys.clear()
+      mouseDown = false
+      state.forward = false
+      state.back = false
+      state.left = false
+      state.right = false
+      state.firing = false
+      state.yawDelta = 0
+    },
   }
 }
 
 export function requestLock(canvas: HTMLCanvasElement): void {
-  if (document.pointerLockElement !== canvas) canvas.requestPointerLock()
+  if (document.pointerLockElement === canvas) return
+  try {
+    Promise.resolve(canvas.requestPointerLock() as unknown).catch(() => {})
+  } catch {
+    // Ignore missing user-activation errors (e.g. Escape resume in browsers that block lock).
+  }
 }

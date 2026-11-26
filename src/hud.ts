@@ -8,7 +8,14 @@ export interface Hud {
   setQuality(preset: QualityPreset): void
 }
 
-export function createHud(root: HTMLElement, onToggleQuality: () => void): Hud {
+export interface HudCallbacks {
+  onToggleQuality: () => void
+  onResume: () => void
+  onRestart: () => void
+  onMenu: () => void
+}
+
+export function createHud(root: HTMLElement, callbacks: HudCallbacks): Hud {
   root.innerHTML = `
     <div class="hud-top">
       <div class="hp-bar"><div class="hp-fill" data-hp></div></div>
@@ -23,8 +30,16 @@ export function createHud(root: HTMLElement, onToggleQuality: () => void): Hud {
     <div class="damage-flash" data-flash></div>
     <div class="overlay" data-menu>
       <h1>ARENA BATTLE</h1>
-      <p>W/S — газ · A/D — руль · мышь — камера и башня · ЛКМ / Space — огонь · G — тени</p>
+      <p>W/S — газ · A/D — руль · мышь — камера и башня · ЛКМ / Space — огонь · G — тени · Esc — пауза</p>
       <p class="big">Клик — в бой</p>
+    </div>
+    <div class="overlay hide" data-paused>
+      <h1>ПАУЗА</h1>
+      <div class="pause-actions">
+        <button type="button" class="menu-btn primary" data-resume>Продолжить</button>
+        <button type="button" class="menu-btn" data-restart>Начать заново</button>
+        <button type="button" class="menu-btn" data-to-menu>В меню</button>
+      </div>
     </div>
     <div class="overlay hide" data-over>
       <h1>РАЗБИТ</h1>
@@ -37,15 +52,25 @@ export function createHud(root: HTMLElement, onToggleQuality: () => void): Hud {
   const score = root.querySelector<HTMLElement>('[data-score]')!
   const wave = root.querySelector<HTMLElement>('[data-wave]')!
   const menu = root.querySelector<HTMLElement>('[data-menu]')!
+  const paused = root.querySelector<HTMLElement>('[data-paused]')!
   const over = root.querySelector<HTMLElement>('[data-over]')!
   const final = root.querySelector<HTMLElement>('[data-final]')!
   const qualityBtn = root.querySelector<HTMLButtonElement>('[data-quality]')!
+  const resumeBtn = root.querySelector<HTMLButtonElement>('[data-resume]')!
+  const restartBtn = root.querySelector<HTMLButtonElement>('[data-restart]')!
+  const menuBtn = root.querySelector<HTMLButtonElement>('[data-to-menu]')!
   const flash = root.querySelector<HTMLElement>('[data-flash]')!
 
-  qualityBtn.addEventListener('click', (e) => {
-    e.stopPropagation()
-    onToggleQuality()
-  })
+  const bindBtn = (btn: HTMLButtonElement, fn: () => void) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation()
+      fn()
+    })
+  }
+  bindBtn(qualityBtn, callbacks.onToggleQuality)
+  bindBtn(resumeBtn, callbacks.onResume)
+  bindBtn(restartBtn, callbacks.onRestart)
+  bindBtn(menuBtn, callbacks.onMenu)
 
   let lastHp = -1
   let lastScore = -1
@@ -72,6 +97,7 @@ export function createHud(root: HTMLElement, onToggleQuality: () => void): Hud {
       if (game.phase !== lastPhase) {
         lastPhase = game.phase
         menu.classList.toggle('hide', game.phase !== 'menu')
+        paused.classList.toggle('hide', game.phase !== 'paused')
         over.classList.toggle('hide', game.phase !== 'over')
         if (game.phase === 'over') {
           final.textContent = `Счёт: ${game.score} · волн пройдено: ${Math.max(0, game.wave - 1)}`
