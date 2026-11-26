@@ -330,7 +330,8 @@ function buildSkyDome(sunDir: THREE.Vector3): THREE.Mesh {
     geo,
     new MeshBasicNodeMaterial({ vertexColors: true, side: THREE.BackSide, fog: false, depthWrite: false }),
   )
-  mesh.renderOrder = -10
+  // Render at the end of the opaque pass (before transparents) so Early-Z discards sky pixels occluded by floor/walls/tanks.
+  mesh.renderOrder = 1
   return mesh
 }
 
