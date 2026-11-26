@@ -268,56 +268,52 @@ export function update(game: Game, dt: number, input: Input, events?: FxEvent[])
     const uz = dz / d
 
     e.cooldown = Math.max(0, e.cooldown - dt)
+    e.yaw = Math.atan2(-dx, -dz)
 
-    if (rawDist <= stats.detectRange) {
-      e.yaw = Math.atan2(-dx, -dz)
-      if (rawDist > stats.approachRange) {
-        const step = stats.speed * dt
-        const next = moveCircle(e, ux * step, uz * step, stats.radius, ARENA.half, game.obstacles)
-        e.x = next.x
-        e.z = next.z
-      }
+    if (rawDist > stats.approachRange) {
+      const step = stats.speed * dt
+      const next = moveCircle(e, ux * step, uz * step, stats.radius, ARENA.half, game.obstacles)
+      e.x = next.x
+      e.z = next.z
+    }
 
-      const sdx = p.x - e.x
-      const sdz = p.z - e.z
-      const sd = Math.hypot(sdx, sdz)
-      const sux = sd > 1e-6 ? sdx / sd : 0
-      const suz = sd > 1e-6 ? sdz / sd : 0
-      const hasLos =
-        sd <= 1e-6 ||
-        raycastArena(e.x, e.z, sux, suz, sd, ARENA.half, game.obstacles) >= sd - 1e-4
+    const sdx = p.x - e.x
+    const sdz = p.z - e.z
+    const sd = Math.hypot(sdx, sdz)
+    const sux = sd > 1e-6 ? sdx / sd : 0
+    const suz = sd > 1e-6 ? sdz / sd : 0
+    const hasLos =
+      sd <= 1e-6 ||
+      raycastArena(e.x, e.z, sux, suz, sd, ARENA.half, game.obstacles) >= sd - 1e-4
 
-      if (hasLos && sd <= stats.detectRange) {
-        e.engageTimer += dt
-      } else {
-        e.engageTimer = 0
-      }
-
-      if (
-        hasLos &&
-        sd <= stats.fireRange &&
-        e.engageTimer >= stats.reaction &&
-        e.cooldown <= 0 &&
-        shotsThisTick < MAX_SIMULTANEOUS_FIRE
-      ) {
-        shotsThisTick++
-        e.cooldown = stats.fireDelay
-        const vx = sux * stats.bulletSpeed
-        const vz = suz * stats.bulletSpeed
-        pushBullet(game, {
-          x: e.x,
-          z: e.z,
-          vx,
-          vz,
-          life: 3,
-          damage: stats.damage,
-          radius: stats.bulletRadius,
-          hostile: true,
-        })
-        events?.push({ kind: 'shot', hostile: true, ownerId: e.id, x: e.x, z: e.z, vx, vz })
-      }
+    if (hasLos && sd <= stats.detectRange) {
+      e.engageTimer += dt
     } else {
       e.engageTimer = 0
+    }
+
+    if (
+      hasLos &&
+      sd <= stats.fireRange &&
+      e.engageTimer >= stats.reaction &&
+      e.cooldown <= 0 &&
+      shotsThisTick < MAX_SIMULTANEOUS_FIRE
+    ) {
+      shotsThisTick++
+      e.cooldown = stats.fireDelay
+      const vx = sux * stats.bulletSpeed
+      const vz = suz * stats.bulletSpeed
+      pushBullet(game, {
+        x: e.x,
+        z: e.z,
+        vx,
+        vz,
+        life: 3,
+        damage: stats.damage,
+        radius: stats.bulletRadius,
+        hostile: true,
+      })
+      events?.push({ kind: 'shot', hostile: true, ownerId: e.id, x: e.x, z: e.z, vx, vz })
     }
 
     e.touch -= dt

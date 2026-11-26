@@ -384,22 +384,26 @@ test('ENEMIES.boss still spawns on wave 3 and enemy bullets carry radius', () =>
   assert.equal(bossBullet.damage, ENEMIES.boss.damage)
 })
 
-test('enemy outside detectRange neither moves toward player nor fires; inside (approachRange, detectRange] approaches', () => {
+test('enemy outside detectRange still approaches when beyond approachRange, keeps engageTimer at 0 and does not fire; holds distance within approachRange', () => {
   const g = createGame([])
   start(g)
   g.enemies.length = 0
   g.toSpawn = 0
 
   const farZ = -(ENEMIES.scout.detectRange + 2)
-  g.enemies.push({ id: 1, kind: 'scout', x: 0, z: farZ, yaw: 0, hp: 30, cooldown: 0, engageTimer: 10, touch: 0 })
-  for (let i = 0; i < 30; i++) update(g, 1 / 60, idle)
-  assert.equal(g.enemies[0].z, farZ, 'enemy beyond detectRange must not move toward player')
+  g.enemies.push({ id: 1, kind: 'scout', x: 1, z: farZ, yaw: 0, hp: 30, cooldown: 0, engageTimer: 10, touch: 0 })
+  update(g, 1 / 60, idle)
+  assert.ok(g.enemies[0].z > farZ, 'enemy beyond detectRange must still approach when rawDist > approachRange')
+  assert.notEqual(g.enemies[0].yaw, 0, 'enemy must aim yaw toward player while approaching')
+  assert.equal(g.enemies[0].engageTimer, 0, 'enemy beyond detectRange must reset engageTimer')
   assert.equal(g.bullets.length, 0, 'enemy beyond detectRange must not fire')
 
-  // Move inside detectRange (16) and outside approachRange (9): enemy approaches player.
-  g.enemies[0].z = -14
+  // Inside approachRange, enemy holds distance and does not move closer.
+  const closeZ = -ENEMIES.scout.approachRange
+  g.enemies[0].x = 0
+  g.enemies[0].z = closeZ
   update(g, 1 / 60, idle)
-  assert.ok(g.enemies[0].z > -14, 'enemy inside detectRange and beyond approachRange must move closer')
+  assert.equal(g.enemies[0].z, closeZ, 'enemy within approachRange must hold distance')
 })
 
 test('enemy in fireRange behind obstacle does not shoot, and shoots after obstacle is removed and reaction elapses', () => {
@@ -508,4 +512,11 @@ test('at most 2 enemies fire in a single tick while remaining enemies wait for t
   update(g, 1 / 60, idle, events)
   const tick3Shots = events.filter((e) => e.kind === 'shot' && e.hostile)
   assert.equal(tick3Shots.length, 1, 'remaining 5th enemy fires in tick 3')
+})
+
+test('standing idle player receives damage from spawned enemies within 15 seconds', () => {
+  const g = createGame([])
+  start(g)
+  for (let i = 0; i < 15 * 60; i++) update(g, 1 / 60, idle)
+  assert.ok(g.player.hp < g.player.maxHp, `idle player should take damage within 15s, hp=${g.player.hp}/${g.player.maxHp}`)
 })
